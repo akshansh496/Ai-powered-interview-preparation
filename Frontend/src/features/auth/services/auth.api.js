@@ -39,7 +39,7 @@ export async function logout() {
 }
 export async function me() {
     try{
-        const response=await api.post("/api/auth/me")
+        const response=await api.get("/api/auth/me")
         return response.data
     }
     catch(error){
