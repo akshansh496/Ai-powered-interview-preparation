@@ -1,57 +1,485 @@
-.home{
+// ── Shared Variables (mirrors home.scss theme) ────────────────────────────────
+$bg-page: #0d1117;
+$bg-card: #161b22;
+$bg-panel: #1c2230;
+$bg-input: #1e2535;
+$border-color: #2a3348;
+$text-primary: #e6edf3;
+$text-muted: #7d8590;
+$accent: #ff2d78;
+$font-stack: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+.home-page {
     width: 100%;
     min-height: 100vh;
+    background-color: $bg-page;
+    color: $text-primary;
+    font-family: $font-stack;
     display: flex;
-    justify-content: center;
+    flex-direction: column;
     align-items: center;
-    .interview-input-group{
+    padding: 2.5rem 1.5rem;
+    box-sizing: border-box;
+}
+
+// ── Page Header ───────────────────────────────────────────────────────────────
+.page-header {
+    text-align: center;
+    margin-bottom: 2.5rem;
+    max-width: 800px;
+
+    h1 {
+        font-size: 2.5rem;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        margin-bottom: 0.75rem;
+        color: $text-primary;
+
+        .highlight {
+            background: linear-gradient(135deg, $accent 0%, #ff6097 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+    }
+
+    p {
+        font-size: 1.1rem;
+        color: $text-muted;
+        line-height: 1.5;
+    }
+}
+
+// ── Main Card ─────────────────────────────────────────────────────────────────
+.interview-card {
+    background-color: $bg-card;
+    border: 1px solid $border-color;
+    border-radius: 1.25rem;
+    max-width: 1000px;
+    width: 100%;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+
+    &__body {
         display: flex;
-        justify-content: center;
+        padding: 2.5rem;
+        gap: 2.5rem;
+
+        @media (max-width: 768px) {
+            flex-direction: column;
+            gap: 2rem;
+            padding: 1.75rem;
+        }
+    }
+}
+
+// ── Left/Right Panels ─────────────────────────────────────────────────────────
+.panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+
+    &__header {
+        display: flex;
         align-items: center;
-        gap:1rem;
-        min-width: 600px; 
-        min-height: 500px;
+        gap: 0.75rem;
+        border-bottom: 1px solid rgba($border-color, 0.6);
+        padding-bottom: 0.75rem;
+
+        h2 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin: 0;
+            color: $text-primary;
+        }
     }
-    .input-group:has(textarea){
-        height: 100%;
+
+    &__icon {
+        display: flex;
+        align-items: center;
+        color: $accent;
+        
+        svg {
+            stroke: $accent;
+        }
     }
-    textarea{
-        height: 100%;
-        width: 100% ;
+
+    &__textarea {
+        flex: 1;
+        min-height: 240px;
+        background-color: $bg-input;
+        border: 1px solid $border-color;
+        border-radius: 0.75rem;
+        color: $text-primary;
+        padding: 1rem;
+        font-family: $font-stack;
+        font-size: 0.95rem;
+        line-height: 1.5;
+        resize: none;
+        outline: none;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+
+        &::placeholder {
+            color: $text-muted;
+            opacity: 0.7;
+        }
+
+        &:focus {
+            border-color: $accent;
+            box-shadow: 0 0 0 3px rgba($accent, 0.15);
+        }
+
+        &--short {
+            min-height: 100px;
+            max-height: 120px;
+            flex: none;
+        }
+    }
+}
+
+// ── Badges ────────────────────────────────────────────────────────────────────
+.badge {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.2rem 0.5rem;
+    border-radius: 0.25rem;
+
+    &--required {
+        background-color: rgba(#ff4d4d, 0.1);
+        color: #ff4d4d;
+        border: 1px solid rgba(#ff4d4d, 0.2);
+    }
+
+    &--best {
+        background-color: rgba(#3fb950, 0.1);
+        color: #3fb950;
+        border: 1px solid rgba(#3fb950, 0.2);
+    }
+}
+
+// ── Char Counter ──────────────────────────────────────────────────────────────
+.char-counter {
+    font-size: 0.75rem;
+    color: $text-muted;
+    text-align: right;
+    margin-top: -0.5rem;
+}
+
+// ── Dividers ──────────────────────────────────────────────────────────────────
+.panel-divider {
+    width: 1px;
+    background-color: $border-color;
+    align-self: stretch;
+    opacity: 0.7;
+
+    @media (max-width: 768px) {
+        width: 100%;
+        height: 1px;
+        align-self: auto;
+    }
+}
+
+.or-divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    color: $text-muted;
+    font-size: 0.75rem;
+    font-weight: 700;
+    margin: 0.5rem 0;
+
+    span {
+        padding: 0 0.75rem;
+    }
+
+    &::before, &::after {
+        content: '';
+        flex: 1;
+        border-bottom: 1px solid rgba($border-color, 0.6);
+    }
+}
+
+// ── Upload Section ─────────────────────────────────────────────────────────────
+.upload-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.section-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: $text-muted;
+}
+
+.dropzone {
+    border: 2px dashed $border-color;
+    border-radius: 0.75rem;
+    padding: 2rem 1.5rem;
+    text-align: center;
+    cursor: pointer;
+    background-color: $bg-input;
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+
+    &:hover {
+        border-color: $accent;
+        background-color: rgba($accent, 0.02);
+
+        .dropzone__icon svg {
+            transform: translateY(-2px);
+            stroke: $accent;
+        }
+    }
+
+    &__icon {
+        color: $text-muted;
+        margin-bottom: 0.75rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        svg {
+            stroke: $text-muted;
+            transition: all 0.2s ease;
+        }
+    }
+
+    &__title {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: $text-primary;
+        margin-bottom: 0.25rem;
+    }
+
+    &__subtitle {
+        font-size: 0.75rem;
+        color: $text-muted;
+    }
+}
+
+// ── Self Description ──────────────────────────────────────────────────────────
+.self-description {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+// ── Info Box ──────────────────────────────────────────────────────────────────
+.info-box {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    background-color: rgba($border-color, 0.25);
+    border: 1px solid rgba($border-color, 0.5);
+    border-radius: 0.75rem;
+    padding: 0.85rem 1rem;
+    margin-top: auto;
+
+    &__icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-top: 0.1rem;
+        color: $accent;
+
+        svg {
+            fill: none;
+            stroke: $accent;
+            circle {
+                fill: none;
+            }
+            line {
+                stroke: $bg-page;
+            }
+        }
+    }
+
+    p {
+        font-size: 0.8rem;
+        color: $text-muted;
+        margin: 0;
+        line-height: 1.4;
+
+        strong {
+            color: $text-primary;
+        }
+    }
+}
+
+// ── Card Footer ───────────────────────────────────────────────────────────────
+.interview-card__footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem 2.5rem;
+    background-color: rgba(0, 0, 0, 0.25);
+    border-top: 1px solid $border-color;
+
+    @media (max-width: 768px) {
+        flex-direction: column;
+        gap: 1.25rem;
+        padding: 1.5rem;
+        text-align: center;
+    }
+
+    .footer-info {
+        font-size: 0.85rem;
+        color: $text-muted;
+    }
+
+    .generate-btn {
+        background: linear-gradient(135deg, $accent 0%, #ff5292 100%);
+        color: white;
         border: none;
         outline: none;
-        padding-inline: 1rem;
-        padding-block: 0.75rem;
-        border-radius: 0.5rem;
-        background-color: #242a34;
-        color: whitesmoke;
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-        resize: none;
-    }
-    .left{
-        align-self: stretch;
-        width: 50%;
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-    }
-    .right{
-        width: 50%;
-        display: flex;
-        flex-direction: column;
-        justify-content: flex-start;
-        align-self: stretch;
-        gap: 1rem;
-    }
-    .file-label{
+        border-radius: 0.6rem;
+        padding: 0.8rem 1.75rem;
+        font-family: $font-stack;
+        font-size: 0.95rem;
+        font-weight: 600;
+        cursor: pointer;
         display: flex;
         align-items: center;
-        justify-content: center;
-        padding: 0.75rem 1rem;
-        background-color: #d8dadd;
-        color: black;
-        border-radius: 0.5rem;
-        cursor: pointer;
+        gap: 0.6rem;
+        box-shadow: 0 4px 14px rgba($accent, 0.35);
+        transition: all 0.2s ease;
 
+        svg {
+            transition: transform 0.2s ease;
+        }
+
+        &:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba($accent, 0.5);
+
+            svg {
+                transform: rotate(15deg) scale(1.1);
+            }
+        }
+
+        &:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 8px rgba($accent, 0.35);
+        }
+    }
+}
+
+// ── Recent Reports ────────────────────────────────────────────────────────────
+.recent-reports {
+    width: 100%;
+    max-width: 1000px;
+    margin-top: 3.5rem;
+
+    h2 {
+        font-size: 1.3rem;
+        font-weight: 700;
+        margin-bottom: 1.25rem;
+        color: $text-primary;
+    }
+
+    .reports-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1.25rem;
+        padding: 0;
+        list-style: none;
+    }
+
+    .report-item {
+        background-color: $bg-card;
+        border: 1px solid $border-color;
+        border-radius: 0.75rem;
+        padding: 1.25rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+
+        &:hover {
+            border-color: $accent;
+            background-color: $bg-panel;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+        }
+
+        h3 {
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: $text-primary;
+            margin: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .report-meta {
+            font-size: 0.8rem;
+            color: $text-muted;
+            margin: 0;
+        }
+
+        .match-score {
+            align-self: flex-start;
+            margin-top: 0.25rem;
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 0.2rem 0.6rem;
+            border-radius: 2rem;
+
+            &.score--high {
+                background-color: rgba(#3fb950, 0.1);
+                color: #3fb950;
+                border: 1px solid rgba(#3fb950, 0.2);
+            }
+
+            &.score--mid {
+                background-color: rgba(#f5a623, 0.1);
+                color: #f5a623;
+                border: 1px solid rgba(#f5a623, 0.2);
+            }
+
+            &.score--low {
+                background-color: rgba(#ff4d4d, 0.1);
+                color: #ff4d4d;
+                border: 1px solid rgba(#ff4d4d, 0.2);
+            }
+        }
+    }
+}
+
+// ── Page Footer ───────────────────────────────────────────────────────────────
+.page-footer {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    margin-top: 5rem;
+    padding-top: 2rem;
+    border-top: 1px solid rgba($border-color, 0.4);
+    width: 100%;
+    max-width: 1000px;
+
+    a {
+        color: $text-muted;
+        text-decoration: none;
+        font-size: 0.85rem;
+        font-weight: 500;
+        transition: color 0.2s ease;
+
+        &:hover {
+            color: $text-primary;
+        }
     }
 }

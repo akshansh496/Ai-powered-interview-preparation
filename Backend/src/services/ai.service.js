@@ -85,6 +85,7 @@ const interviewReportSchema = z.object({
     .describe(
       "List of preparation plans for the candidate to follow before the interview"
     ),
+    title:z.string().describe("The title of the job for which the report is generated")
 });
 
 
