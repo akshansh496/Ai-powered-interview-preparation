@@ -9,8 +9,9 @@
     transition: all 0.3s ease-in-out;
 
     &.primary-button{
-        background-color: rgb(220, 50, 96);
-        color: whitesmoke;
+        background-color: #00D2FF;
+        color: #0B192C;
+        font-weight: 600;
     }
 
     &:active{
