@@ -61,15 +61,20 @@ export const useInterview = () => {
 
     const getResumePdf = async (interviewReportId) => {
         setLoading(true)
-        let response = null
         try {
-            response = await generateResumePdf({ interviewReportId })
-            const url = window.URL.createObjectURL(new Blob([ response ], { type: "application/pdf" }))
-            const link = document.createElement("a")
-            link.href = url
-            link.setAttribute("download", `resume_${interviewReportId}.pdf`)
-            document.body.appendChild(link)
-            link.click()
+            const data = await generateResumePdf({ interviewReportId })
+            if (data && data.html) {
+                const printWindow = window.open("", "_blank")
+                if (printWindow) {
+                    printWindow.document.write(data.html)
+                    printWindow.document.title = `Resume_${interviewReportId}`
+                    printWindow.document.close()
+                    printWindow.focus()
+                    printWindow.print()
+                } else {
+                    alert("Please allow popups to print/download your resume.")
+                }
+            }
         }
         catch (error) {
             console.log(error)
