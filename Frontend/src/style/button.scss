@@ -1,20 +1,30 @@
-.button{
+.button {
     border: none;
     outline: none;
-    padding-inline: 1rem;
-    padding-block: 0.75rem;
-    border-radius: 1rem;
+    padding-inline: 1.25rem;
+    padding-block: 0.8rem;
+    border-radius: 0.5rem;
     margin-top: 1rem;
     cursor: pointer;
-    transition: all 0.3s ease-in-out;
+    font-weight: 700;
+    font-family: inherit;
+    transition: all 0.2s ease;
+    box-sizing: border-box;
 
-    &.primary-button{
-        background-color: #00D2FF;
-        color: #0B192C;
-        font-weight: 600;
+    &.primary-button {
+        background: linear-gradient(135deg, #06B6D4 0%, #3B82F6 50%, #8B5CF6 100%);
+        background-size: 200% auto;
+        color: #FFFFFF;
+        box-shadow: 0 4px 15px rgba(6, 182, 212, 0.3);
+
+        &:hover {
+            background-position: right center;
+            box-shadow: 0 6px 20px rgba(6, 182, 212, 0.5);
+            transform: translateY(-1px);
+        }
     }
 
-    &:active{
-        transform: scale(0.9);
+    &:active {
+        transform: scale(0.97);
     }
 }

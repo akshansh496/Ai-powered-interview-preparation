@@ -17,7 +17,27 @@ const Register=() => {
         navigate('/');
     }
 
-    if(loading) return <h1>Loading...</h1>
+    if (loading) {
+        return (
+            <main className='loading-screen'>
+                <div className='loading-container'>
+                    <div className='loader-orb'>
+                        <div className='orb-glow'></div>
+                        <div className='orb-outer'></div>
+                        <div className='orb-inner'></div>
+                        <div className='orb-core'></div>
+                    </div>
+                    <div className='loading-text'>
+                        <h2>Creating Account</h2>
+                        <p>Setting up your profile and preparing your personalized workspace...</p>
+                    </div>
+                    <div className='loading-progress-bar'>
+                        <div className='progress-fill'></div>
+                    </div>
+                </div>
+            </main>
+        )
+    }
 
     return (
         <main>

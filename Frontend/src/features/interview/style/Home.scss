@@ -1,18 +1,18 @@
-// ── Shared Variables (mirrors home.scss theme) ────────────────────────────────
-$bg-page: #FFFFFF;
-$bg-card: #FFFFFF;
-$bg-panel: #F8FAFC;
-$bg-input: #FFFFFF;
-$border-color: #CBD5E1;
-$text-primary: #0B192C;
-$text-muted: #1E293B;
-$accent: #00D2FF;
-$font-stack: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+// ── Shared Variables ──────────────────────────────────────────────────────────
+$bg-page: transparent; // Body background handled by style.scss
+$bg-card: rgba(17, 24, 39, 0.55); // Dark glass card background
+$bg-panel: rgba(30, 41, 59, 0.35); // Translucent slate panel
+$bg-input: rgba(15, 23, 42, 0.7);  // Sleek deep input background
+$border-color: rgba(255, 255, 255, 0.08); // Subtle white borders
+$text-primary: #F8FAFC;      // Bright slate text
+$text-muted: #94A3B8;        // Slate-400 muted text
+$accent: #06B6D4;            // Bright cyan accent
+$purple-accent: #8B5CF6;     // Modern violet accent
+$font-stack: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 
 .home-page {
     width: 100%;
     min-height: 100vh;
-    background-color: $bg-page;
     color: $text-primary;
     font-family: $font-stack;
     display: flex;
@@ -36,7 +36,7 @@ $font-stack: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, s
         color: $text-primary;
 
         .highlight {
-            background: linear-gradient(135deg, $accent 0%, #00B8E6 100%);
+            background: linear-gradient(135deg, $accent 0%, $purple-accent 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
@@ -45,7 +45,7 @@ $font-stack: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, s
     p {
         font-size: 1.1rem;
         color: $text-muted;
-        line-height: 1.5;
+        line-height: 1.6;
     }
 }
 
@@ -53,10 +53,11 @@ $font-stack: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, s
 .interview-card {
     background-color: $bg-card;
     border: 1px solid $border-color;
-    border-radius: 1.25rem;
+    border-radius: 1rem;
     max-width: 1000px;
     width: 100%;
-    box-shadow: 0 20px 40px rgba(11, 25, 44, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(16px);
     overflow: hidden;
     display: flex;
     flex-direction: column;
@@ -86,7 +87,7 @@ $font-stack: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, s
         display: flex;
         align-items: center;
         gap: 0.75rem;
-        border-bottom: 1px solid rgba($border-color, 0.6);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
         padding-bottom: 0.75rem;
 
         h2 {
@@ -112,8 +113,8 @@ $font-stack: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, s
         min-height: 240px;
         background-color: $bg-input;
         border: 1px solid $border-color;
-        border-radius: 0.75rem;
-        color: $text-primary;
+        border-radius: 0.5rem;
+        color: #FFFFFF;
         padding: 1rem;
         font-family: $font-stack;
         font-size: 0.95rem;
@@ -124,7 +125,7 @@ $font-stack: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, s
 
         &::placeholder {
             color: $text-muted;
-            opacity: 0.7;
+            opacity: 0.6;
         }
 
         &:focus {
@@ -150,15 +151,15 @@ $font-stack: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, s
     border-radius: 0.25rem;
 
     &--required {
-        background-color: rgba(#ff4d4d, 0.1);
+        background-color: rgba(#ff4d4d, 0.12);
         color: #ff4d4d;
-        border: 1px solid rgba(#ff4d4d, 0.2);
+        border: 1px solid rgba(#ff4d4d, 0.25);
     }
 
     &--best {
-        background-color: rgba(#3fb950, 0.1);
-        color: #3fb950;
-        border: 1px solid rgba(#3fb950, 0.2);
+        background-color: rgba(#10b981, 0.12);
+        color: #10b981;
+        border: 1px solid rgba(#10b981, 0.25);
     }
 }
 
@@ -173,9 +174,8 @@ $font-stack: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, s
 // ── Dividers ──────────────────────────────────────────────────────────────────
 .panel-divider {
     width: 1px;
-    background-color: $border-color;
+    background-color: rgba(255, 255, 255, 0.06);
     align-self: stretch;
-    opacity: 0.7;
 
     @media (max-width: 768px) {
         width: 100%;
@@ -200,7 +200,7 @@ $font-stack: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, s
     &::before, &::after {
         content: '';
         flex: 1;
-        border-bottom: 1px solid rgba($border-color, 0.6);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     }
 }
 
@@ -221,12 +221,12 @@ $font-stack: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, s
 }
 
 .dropzone {
-    border: 2px dashed $border-color;
-    border-radius: 0.75rem;
+    border: 2px dashed rgba(255, 255, 255, 0.15);
+    border-radius: 0.5rem;
     padding: 2rem 1.5rem;
     text-align: center;
     cursor: pointer;
-    background-color: $bg-input;
+    background-color: rgba(15, 23, 42, 0.4);
     transition: all 0.2s ease;
     display: flex;
     flex-direction: column;
@@ -235,7 +235,7 @@ $font-stack: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, s
 
     &:hover {
         border-color: $accent;
-        background-color: rgba($accent, 0.02);
+        background-color: rgba($accent, 0.03);
 
         .dropzone__icon svg {
             transform: translateY(-2px);
@@ -281,9 +281,9 @@ $font-stack: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, s
     display: flex;
     align-items: flex-start;
     gap: 0.75rem;
-    background-color: rgba($border-color, 0.25);
-    border: 1px solid rgba($border-color, 0.5);
-    border-radius: 0.75rem;
+    background-color: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 0.5rem;
     padding: 0.85rem 1rem;
     margin-top: auto;
 
@@ -301,7 +301,7 @@ $font-stack: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, s
                 fill: none;
             }
             line {
-                stroke: $bg-page;
+                stroke: #0A0F1D;
             }
         }
     }
@@ -310,7 +310,7 @@ $font-stack: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, s
         font-size: 0.8rem;
         color: $text-muted;
         margin: 0;
-        line-height: 1.4;
+        line-height: 1.5;
 
         strong {
             color: $text-primary;
@@ -324,7 +324,7 @@ $font-stack: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, s
     justify-content: space-between;
     align-items: center;
     padding: 1.5rem 2.5rem;
-    background-color: #F8FAFC;
+    background-color: rgba(10, 15, 30, 0.5);
     border-top: 1px solid $border-color;
 
     @media (max-width: 768px) {
@@ -340,11 +340,12 @@ $font-stack: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, s
     }
 
     .generate-btn {
-        background: linear-gradient(135deg, $accent 0%, #00B8E6 100%);
-        color: #0B192C;
+        background: linear-gradient(135deg, $accent 0%, $purple-accent 100%);
+        background-size: 200% auto;
+        color: #FFFFFF;
         border: none;
         outline: none;
-        border-radius: 0.6rem;
+        border-radius: 0.5rem;
         padding: 0.8rem 1.75rem;
         font-family: $font-stack;
         font-size: 0.95rem;
@@ -353,7 +354,7 @@ $font-stack: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, s
         display: flex;
         align-items: center;
         gap: 0.6rem;
-        box-shadow: 0 4px 14px rgba(0, 210, 255, 0.3);
+        box-shadow: 0 4px 14px rgba(6, 182, 212, 0.3);
         transition: all 0.2s ease;
 
         svg {
@@ -362,7 +363,8 @@ $font-stack: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, s
 
         &:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0, 210, 255, 0.5);
+            background-position: right center;
+            box-shadow: 0 6px 20px rgba(6, 182, 212, 0.5);
 
             svg {
                 transform: rotate(15deg) scale(1.1);
@@ -371,7 +373,7 @@ $font-stack: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, s
 
         &:active {
             transform: translateY(0);
-            box-shadow: 0 2px 8px rgba(0, 210, 255, 0.3);
+            box-shadow: 0 2px 8px rgba(6, 182, 212, 0.3);
         }
     }
 }
@@ -398,7 +400,7 @@ $font-stack: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, s
     }
 
     .report-item {
-        background-color: $bg-card;
+        background-color: rgba(17, 24, 39, 0.45);
         border: 1px solid $border-color;
         border-radius: 0.75rem;
         padding: 1.25rem;
@@ -407,12 +409,13 @@ $font-stack: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, s
         display: flex;
         flex-direction: column;
         gap: 0.5rem;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
 
         &:hover {
             border-color: $accent;
-            background-color: $bg-panel;
+            background-color: rgba(30, 41, 59, 0.4);
             transform: translateY(-2px);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+            box-shadow: 0 8px 24px rgba(6, 182, 212, 0.15);
         }
 
         h3 {
@@ -440,21 +443,21 @@ $font-stack: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, s
             border-radius: 2rem;
 
             &.score--high {
-                background-color: rgba(#3fb950, 0.1);
-                color: #3fb950;
-                border: 1px solid rgba(#3fb950, 0.2);
+                background-color: rgba(#10b981, 0.12);
+                color: #10b981;
+                border: 1px solid rgba(#10b981, 0.25);
             }
 
             &.score--mid {
-                background-color: rgba(#f5a623, 0.1);
+                background-color: rgba(#f5a623, 0.12);
                 color: #f5a623;
-                border: 1px solid rgba(#f5a623, 0.2);
+                border: 1px solid rgba(#f5a623, 0.25);
             }
 
             &.score--low {
-                background-color: rgba(#ff4d4d, 0.1);
-                color: #ff4d4d;
-                border: 1px solid rgba(#ff4d4d, 0.2);
+                background-color: rgba(#ef4444, 0.12);
+                color: #ef4444;
+                border: 1px solid rgba(#ef4444, 0.25);
             }
         }
     }
@@ -467,7 +470,7 @@ $font-stack: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, s
     gap: 2rem;
     margin-top: 5rem;
     padding-top: 2rem;
-    border-top: 1px solid rgba($border-color, 0.4);
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
     width: 100%;
     max-width: 1000px;
 
@@ -480,6 +483,154 @@ $font-stack: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, s
 
         &:hover {
             color: $text-primary;
+        }
+    }
+}
+
+// ── Top Navbar ────────────────────────────────────────────────────────────────
+.app-navbar {
+    width: 100%;
+    max-width: 1000px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 0;
+    margin-bottom: 2rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+
+    .navbar-brand {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-weight: 800;
+        font-size: 1.25rem;
+        color: $text-primary;
+        letter-spacing: -0.02em;
+
+        .brand-icon {
+            color: $accent;
+        }
+    }
+
+    .navbar-user {
+        display: flex;
+        align-items: center;
+        gap: 1.25rem;
+
+        .user-name {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: $text-muted;
+        }
+
+        .logout-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.5rem 0.85rem;
+            background-color: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.5rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: $text-primary;
+            cursor: pointer;
+            transition: all 0.2s ease;
+
+            svg {
+                stroke: currentColor;
+            }
+
+            &:hover {
+                background-color: rgba(255, 255, 255, 0.05);
+                border-color: $text-primary;
+            }
+        }
+    }
+}
+
+// ── File Uploaded Status ──────────────────────────────────────────────────────
+.file-uploaded-status {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+    background-color: rgba(16, 185, 129, 0.06); // Subtle green
+    border: 1px dashed rgba(16, 185, 129, 0.4);
+    border-radius: 0.5rem;
+    margin-top: 0.5rem;
+    box-sizing: border-box;
+
+    &__info {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    &__icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.25rem;
+        height: 2.25rem;
+        background-color: rgba(16, 185, 129, 0.15);
+        color: #10B981;
+        border-radius: 0.5rem;
+    }
+
+    &__details {
+        text-align: left;
+    }
+
+    &__name {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #10B981;
+        margin: 0;
+        max-width: 180px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    &__size {
+        font-size: 0.75rem;
+        color: rgba(16, 185, 129, 0.8);
+        margin: 0;
+    }
+
+    &__actions {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 0.5rem;
+    }
+
+    &__badge {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: #10B981;
+        background-color: rgba(16, 185, 129, 0.15);
+        padding: 0.2rem 0.5rem;
+        border-radius: 9999px;
+    }
+
+    &__remove {
+        background: none;
+        border: none;
+        color: #EF4444;
+        font-size: 0.75rem;
+        font-weight: 600;
+        cursor: pointer;
+        padding: 0;
+        text-decoration: underline;
+
+        &:hover {
+            color: #F87171;
         }
     }
 }

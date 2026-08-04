@@ -1,17 +1,171 @@
 @use  "./style/button.scss";
 
-*{
+* {
     margin: 0%;
     padding: 0%;
     box-sizing: border-box;
 }
 
-html,body,#root{
+html, body, #root {
     width: 100%;
-    background-color: #FFFFFF;
-    color: #1E293B;
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    min-height: 100vh;
+    background: radial-gradient(circle at 50% 0%, #15182D 0%, #080B13 100%);
+    background-color: #080B13;
+    color: #F8FAFC;
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    overflow-x: hidden;
 }
-.highlight{
-    color: #00D2FF;
+
+.highlight {
+    background: linear-gradient(135deg, #06B6D4 0%, #8B5CF6 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: 700;
+}
+
+// ── Global Custom Scrollbar ──
+*::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+*::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.02);
+}
+*::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 9999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+// ── Futuristic Loading Screen ──
+.loading-screen {
+    width: 100%;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: radial-gradient(circle at 50% 50%, #0C101F 0%, #03060F 100%);
+    padding: 2rem;
+    box-sizing: border-box;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 9999;
+}
+
+.loading-container {
+    text-align: center;
+    max-width: 480px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.loader-orb {
+    position: relative;
+    width: 90px;
+    height: 90px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    .orb-glow {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        background: radial-gradient(circle, rgba(6, 182, 212, 0.3) 0%, transparent 70%);
+        animation: orbPulse 2s ease-in-out infinite;
+    }
+
+    .orb-outer {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        border: 2px solid transparent;
+        border-top-color: #06B6D4;
+        border-bottom-color: #8B5CF6;
+        border-radius: 50%;
+        animation: orbRotate 1.5s linear infinite;
+    }
+
+    .orb-inner {
+        position: absolute;
+        width: 70%;
+        height: 70%;
+        border: 2px solid transparent;
+        border-left-color: #3B82F6;
+        border-right-color: #A855F7;
+        border-radius: 50%;
+        animation: orbRotateCounter 2s linear infinite;
+    }
+
+    .orb-core {
+        width: 25px;
+        height: 25px;
+        background: linear-gradient(135deg, #06B6D4 0%, #8B5CF6 100%);
+        border-radius: 50%;
+        box-shadow: 0 0 15px rgba(6, 182, 212, 0.8);
+    }
+}
+
+.loading-text {
+    h2 {
+        font-size: 1.5rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        margin-bottom: 0.5rem;
+        color: #F8FAFC;
+    }
+
+    p {
+        font-size: 0.95rem;
+        color: #94A3B8;
+        line-height: 1.6;
+    }
+}
+
+.loading-progress-bar {
+    width: 240px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 9999px;
+    overflow: hidden;
+    margin-top: 0.5rem;
+
+    .progress-fill {
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, #06B6D4, #3B82F6, #8B5CF6, #06B6D4);
+        background-size: 200% 100%;
+        border-radius: 9999px;
+        animation: progressMove 1.5s linear infinite, progressScan 2.5s ease-in-out infinite;
+    }
+}
+
+@keyframes orbPulse {
+    0%, 100% { transform: scale(1); opacity: 0.5; }
+    50% { transform: scale(1.25); opacity: 0.9; }
+}
+
+@keyframes orbRotate {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+@keyframes orbRotateCounter {
+    0% { transform: rotate(360deg); }
+    100% { transform: rotate(0deg); }
+}
+
+@keyframes progressMove {
+    0% { background-position: 0% 0%; }
+    100% { background-position: 200% 0%; }
+}
+
+@keyframes progressScan {
+    0%, 100% { width: 30%; transform: translateX(-50%); }
+    50% { width: 60%; transform: translateX(250%); }
 }

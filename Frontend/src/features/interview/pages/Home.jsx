@@ -2,18 +2,21 @@ import React, { useState, useRef } from 'react'
 import "../style/Home.scss"
 import { useInterview } from '../hooks/useInterview.js'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from "../../auth/hooks/useAuth"
 
 const Home = () => {
 
-    const { loading, generateReport,reports } = useInterview()
+    const { loading, generateReport, reports } = useInterview()
+    const { user, handleLogout } = useAuth()
     const [ jobDescription, setJobDescription ] = useState("")
     const [ selfDescription, setSelfDescription ] = useState("")
+    const [ selectedFile, setSelectedFile ] = useState(null)
     const resumeInputRef = useRef()
 
     const navigate = useNavigate()
 
     const handleGenerateReport = async () => {
-        const resumeFile = resumeInputRef.current.files[ 0 ]
+        const resumeFile = selectedFile
         const data = await generateReport({ jobDescription, selfDescription, resumeFile })
         if (data && data._id) {
             navigate(`/interview/${data._id}`)
@@ -22,16 +25,53 @@ const Home = () => {
         }
     }
 
+    const handleRemoveFile = (e) => {
+        e.preventDefault()
+        setSelectedFile(null)
+        if (resumeInputRef.current) {
+            resumeInputRef.current.value = ""
+        }
+    }
+
     if (loading) {
         return (
             <main className='loading-screen'>
-                <h1>Loading your interview plan...</h1>
+                <div className='loading-container'>
+                    <div className='loader-orb'>
+                        <div className='orb-glow'></div>
+                        <div className='orb-outer'></div>
+                        <div className='orb-inner'></div>
+                        <div className='orb-core'></div>
+                    </div>
+                    <div className='loading-text'>
+                        <h2>Analyzing &amp; Planning</h2>
+                        <p>Our AI is extracting skills from your profile, mapping job requirements, identifying preparation gaps, and crafting your day-wise study roadmap...</p>
+                    </div>
+                    <div className='loading-progress-bar'>
+                        <div className='progress-fill'></div>
+                    </div>
+                </div>
             </main>
         )
     }
 
     return (
         <div className='home-page'>
+
+            {/* Top Navbar */}
+            <nav className='app-navbar'>
+                <div className='navbar-brand'>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="brand-icon"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                    <span>InterviewAI</span>
+                </div>
+                <div className='navbar-user'>
+                    <span className='user-name'>{user?.username || user?.email || 'Candidate'}</span>
+                    <button className='logout-btn' onClick={handleLogout}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+                        Logout
+                    </button>
+                </div>
+            </nav>
 
             {/* Page Header */}
             <header className='page-header'>
@@ -79,14 +119,37 @@ const Home = () => {
                                 Upload Resume
                                 <span className='badge badge--best'>Best Results</span>
                             </label>
-                            <label className='dropzone' htmlFor='resume'>
-                                <span className='dropzone__icon'>
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 16 12 12 8 16" /><line x1="12" y1="12" x2="12" y2="21" /><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" /></svg>
-                                </span>
-                                <p className='dropzone__title'>Click to upload or drag &amp; drop</p>
-                                <p className='dropzone__subtitle'>PDF or DOCX (Max 5MB)</p>
-                                <input ref={resumeInputRef} hidden type='file' id='resume' name='resume' accept='.pdf,.docx' />
-                            </label>
+                            {selectedFile ? (
+                                <div className='file-uploaded-status'>
+                                    <div className='file-uploaded-status__info'>
+                                        <div className='file-uploaded-status__icon'>
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                        </div>
+                                        <div className='file-uploaded-status__details'>
+                                            <p className='file-uploaded-status__name'>{selectedFile.name}</p>
+                                            <p className='file-uploaded-status__size'>{(selectedFile.size / 1024).toFixed(1)} KB</p>
+                                        </div>
+                                    </div>
+                                    <div className='file-uploaded-status__actions'>
+                                        <span className='file-uploaded-status__badge'>
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{marginRight: "2px"}}><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                            Attached
+                                        </span>
+                                        <button className='file-uploaded-status__remove' onClick={handleRemoveFile}>
+                                            Remove
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <label className='dropzone' htmlFor='resume'>
+                                    <span className='dropzone__icon'>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 16 12 12 8 16" /><line x1="12" y1="12" x2="12" y2="21" /><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" /></svg>
+                                    </span>
+                                    <p className='dropzone__title'>Click to upload or drag &amp; drop</p>
+                                    <p className='dropzone__subtitle'>PDF or DOCX (Max 5MB)</p>
+                                </label>
+                            )}
+                            <input ref={resumeInputRef} hidden type='file' id='resume' name='resume' accept='.pdf,.docx' onChange={(e) => { if (e.target.files[0]) setSelectedFile(e.target.files[0]) }} />
                         </div>
 
                         {/* OR Divider */}
