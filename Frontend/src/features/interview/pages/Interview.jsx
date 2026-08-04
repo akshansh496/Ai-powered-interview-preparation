@@ -70,6 +70,14 @@ const Interview = () => {
         }
     }, [ interviewId ])
 
+    useEffect(() => {
+        window.scrollTo(0, 0)
+        const contentEl = document.querySelector('.interview-content')
+        if (contentEl) {
+            contentEl.scrollTop = 0
+        }
+    }, [ activeNav ])
+
 
 
     if (loading || !report) {
