@@ -13,16 +13,39 @@ export const useInterview = () => {
         throw new Error("useInterview must be used within an InterviewProvider")
     }
 
-    const { loading, setLoading, report, setReport, reports, setReports } = context
+    const { 
+        loading, 
+        setLoading, 
+        loadingMessage, 
+        setLoadingMessage, 
+        error, 
+        setError, 
+        report, 
+        setReport, 
+        reports, 
+        setReports 
+    } = context
 
     const generateReport = async ({ jobDescription, selfDescription, resumeFile }) => {
+        setError(null)
         setLoading(true)
+        setLoadingMessage({
+            title: "Generating Strategy",
+            subtitle: "Analyzing job description and preparing your custom questions..."
+        })
         let response = null
         try {
             response = await generateInterviewReport({ jobDescription, selfDescription, resumeFile })
-            setReport(response.interviewReport)
-        } catch (error) {
-            console.log(error)
+            if (response && response.interviewReport) {
+                setReport(response.interviewReport)
+            } else {
+                throw new Error("Empty report response from server.")
+            }
+        } catch (err) {
+            console.error(err)
+            const errMsg = err.response?.data?.message || err.message || "Failed to generate interview strategy."
+            setError(errMsg)
+            throw err
         } finally {
             setLoading(false)
         }
@@ -31,13 +54,24 @@ export const useInterview = () => {
     }
 
     const getReportById = async (interviewId) => {
+        setError(null)
         setLoading(true)
+        setLoadingMessage({
+            title: "Retrieving Report",
+            subtitle: "Fetching your personalized preparation roadmap..."
+        })
         let response = null
         try {
             response = await getInterviewReportById(interviewId)
-            setReport(response.interviewReport)
-        } catch (error) {
-            console.log(error)
+            if (response && response.interviewReport) {
+                setReport(response.interviewReport)
+            } else {
+                throw new Error("Report not found.")
+            }
+        } catch (err) {
+            console.error(err)
+            const errMsg = err.response?.data?.message || err.message || "Failed to retrieve interview report."
+            setError(errMsg)
         } finally {
             setLoading(false)
         }
@@ -45,13 +79,20 @@ export const useInterview = () => {
     }
 
     const getReports = async () => {
+        setError(null)
         setLoading(true)
+        setLoadingMessage({
+            title: "Loading Dashboard",
+            subtitle: "Retrieving your recent interview preparation plans..."
+        })
         let response = null
         try {
             response = await getAllInterviewReports()
-            setReports(response.interviewReports)
-        } catch (error) {
-            console.log(error)
+            setReports(response.interviewReports || [])
+        } catch (err) {
+            console.error(err)
+            const errMsg = err.response?.data?.message || err.message || "Failed to fetch interview plans."
+            setError(errMsg)
         } finally {
             setLoading(false)
         }
@@ -60,7 +101,12 @@ export const useInterview = () => {
     }
 
     const getResumePdf = async (interviewReportId) => {
+        setError(null)
         setLoading(true)
+        setLoadingMessage({
+            title: "Preparing Resume",
+            subtitle: "Formatting and compiling your customized resume PDF..."
+        })
         try {
             const data = await generateResumePdf({ interviewReportId })
             if (data && data.html) {
@@ -74,10 +120,14 @@ export const useInterview = () => {
                 } else {
                     alert("Please allow popups to print/download your resume.")
                 }
+            } else {
+                throw new Error("Empty resume response from server.")
             }
         }
-        catch (error) {
-            console.log(error)
+        catch (err) {
+            console.error(err)
+            const errMsg = err.response?.data?.message || err.message || "Failed to generate resume."
+            setError(errMsg)
         } finally {
             setLoading(false)
         }
@@ -91,6 +141,17 @@ export const useInterview = () => {
         }
     }, [ interviewId ])
 
-    return { loading, report, reports, generateReport, getReportById, getReports, getResumePdf }
+    return { 
+        loading, 
+        loadingMessage, 
+        error, 
+        setError, 
+        report, 
+        reports, 
+        generateReport, 
+        getReportById, 
+        getReports, 
+        getResumePdf 
+    }
 
 }

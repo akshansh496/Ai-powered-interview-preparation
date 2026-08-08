@@ -60,7 +60,7 @@ const RoadMapDay = ({ day }) => (
 // ── Main Component ────────────────────────────────────────────────────────────
 const Interview = () => {
     const [ activeNav, setActiveNav ] = useState('technical')
-    const { report, getReportById, loading, getResumePdf } = useInterview()
+    const { report, getReportById, loading, loadingMessage, error, setError, getResumePdf } = useInterview()
     const { interviewId } = useParams()
     const navigate = useNavigate()
 
@@ -78,7 +78,36 @@ const Interview = () => {
         }
     }, [ activeNav ])
 
-
+    if (error) {
+        return (
+            <main className='error-screen'>
+                <div className='error-container'>
+                    <div className='error-icon-container'>
+                        <svg className='error-icon' xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#EF4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="8" x2="12" y2="12"></line>
+                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                        </svg>
+                    </div>
+                    <div className='error-text'>
+                        <h2>Something Went Wrong</h2>
+                        <p>{error}</p>
+                    </div>
+                    <div className='error-actions'>
+                        <button className='button primary-button' onClick={() => {
+                            setError(null);
+                            if (interviewId) getReportById(interviewId);
+                        }}>
+                            Try Again
+                        </button>
+                        <button className='button secondary-button' onClick={() => { setError(null); navigate("/"); }}>
+                            Go to Home
+                        </button>
+                    </div>
+                </div>
+            </main>
+        )
+    }
 
     if (loading || !report) {
         return (
@@ -91,8 +120,8 @@ const Interview = () => {
                         <div className='orb-core'></div>
                     </div>
                     <div className='loading-text'>
-                        <h2>Retrieving Report</h2>
-                        <p>Creating your personalized resume</p>
+                        <h2>{loadingMessage?.title || "Retrieving Report"}</h2>
+                        <p>{loadingMessage?.subtitle || "Fetching your personalized preparation roadmap..."}</p>
                     </div>
                     <div className='loading-progress-bar'>
                         <div className='progress-fill'></div>

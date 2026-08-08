@@ -169,3 +169,118 @@ html, body, #root {
     0%, 100% { width: 30%; transform: translateX(-50%); }
     50% { width: 60%; transform: translateX(250%); }
 }
+
+// ── Futuristic Error Screen ──
+.error-screen {
+    width: 100%;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: radial-gradient(circle at 50% 50%, #1A0D10 0%, #050204 100%);
+    padding: 2rem;
+    box-sizing: border-box;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 9999;
+}
+
+.error-container {
+    text-align: center;
+    max-width: 480px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+    background: rgba(26, 13, 16, 0.6);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    border-radius: 16px;
+    padding: 2.5rem 2rem;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+}
+
+.error-icon-container {
+    position: relative;
+    width: 80px;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: rgba(239, 68, 68, 0.1);
+    border: 2px solid rgba(239, 68, 68, 0.35);
+    margin-bottom: 0.5rem;
+    animation: errorPulse 2s ease-in-out infinite;
+
+    .error-icon {
+        filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.6));
+    }
+}
+
+.error-text {
+    h2 {
+        font-size: 1.5rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        margin-bottom: 0.5rem;
+        color: #FCA5A5;
+    }
+
+    p {
+        font-size: 0.95rem;
+        color: #CBD5E1;
+        line-height: 1.6;
+        word-break: break-word;
+    }
+}
+
+.error-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1rem;
+    width: 100%;
+    justify-content: center;
+
+    .button {
+        padding: 0.75rem 1.5rem;
+        font-size: 0.9rem;
+        font-weight: 600;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .primary-button {
+        background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+        color: white;
+        border: none;
+        box-shadow: 0 4px 14px rgba(239, 68, 68, 0.4);
+
+        &:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(239, 68, 68, 0.6);
+        }
+    }
+
+    .secondary-button {
+        background: rgba(255, 255, 255, 0.05);
+        color: #E2E8F0;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+
+        &:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateY(-2px);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+    }
+}
+
+@keyframes errorPulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 15px rgba(239, 68, 68, 0.2); }
+    50% { transform: scale(1.05); box-shadow: 0 0 25px rgba(239, 68, 68, 0.4); }
+}

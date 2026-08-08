@@ -6,7 +6,7 @@ import { useAuth } from "../../auth/hooks/useAuth"
 
 const Home = () => {
 
-    const { loading, generateReport, reports } = useInterview()
+    const { loading, loadingMessage, error, setError, generateReport, reports } = useInterview()
     const { user, handleLogout } = useAuth()
     const [ jobDescription, setJobDescription ] = useState("")
     const [ selfDescription, setSelfDescription ] = useState("")
@@ -17,11 +17,13 @@ const Home = () => {
 
     const handleGenerateReport = async () => {
         const resumeFile = selectedFile
-        const data = await generateReport({ jobDescription, selfDescription, resumeFile })
-        if (data && data._id) {
-            navigate(`/interview/${data._id}`)
-        } else {
-            alert("Failed to generate interview strategy. Please check the target job description and try again.")
+        try {
+            const data = await generateReport({ jobDescription, selfDescription, resumeFile })
+            if (data && data._id) {
+                navigate(`/interview/${data._id}`)
+            }
+        } catch (err) {
+            console.error("Report generation failed:", err)
         }
     }
 
@@ -31,6 +33,31 @@ const Home = () => {
         if (resumeInputRef.current) {
             resumeInputRef.current.value = ""
         }
+    }
+
+    if (error) {
+        return (
+            <main className='error-screen'>
+                <div className='error-container'>
+                    <div className='error-icon-container'>
+                        <svg className='error-icon' xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#EF4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="8" x2="12" y2="12"></line>
+                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                        </svg>
+                    </div>
+                    <div className='error-text'>
+                        <h2>Something Went Wrong</h2>
+                        <p>{error}</p>
+                    </div>
+                    <div className='error-actions'>
+                        <button className='button primary-button' onClick={() => setError(null)}>
+                            Try Again
+                        </button>
+                    </div>
+                </div>
+            </main>
+        )
     }
 
     if (loading) {
@@ -44,7 +71,8 @@ const Home = () => {
                         <div className='orb-core'></div>
                     </div>
                     <div className='loading-text'>
-                        <h2>Analyzing &amp; Planning</h2>
+                        <h2>{loadingMessage?.title || "Analyzing & Planning"}</h2>
+                        {loadingMessage?.subtitle && <p>{loadingMessage.subtitle}</p>}
                     </div>
                     <div className='loading-progress-bar'>
                         <div className='progress-fill'></div>
