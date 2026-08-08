@@ -92,7 +92,7 @@ const Interview = () => {
                     </div>
                     <div className='loading-text'>
                         <h2>Retrieving Report</h2>
-                        <p>Fetching your customized interview preparation roadmap and strategy questions...</p>
+                        <p>Creating your personalized resume</p>
                     </div>
                     <div className='loading-progress-bar'>
                         <div className='progress-fill'></div>

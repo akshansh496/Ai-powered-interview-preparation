@@ -45,7 +45,6 @@ const Home = () => {
                     </div>
                     <div className='loading-text'>
                         <h2>Analyzing &amp; Planning</h2>
-                        <p>Our AI is extracting skills from your profile, mapping job requirements, identifying preparation gaps, and crafting your day-wise study roadmap...</p>
                     </div>
                     <div className='loading-progress-bar'>
                         <div className='progress-fill'></div>
