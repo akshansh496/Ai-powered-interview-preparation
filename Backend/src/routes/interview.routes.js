@@ -33,5 +33,18 @@ interviewRouter.get("/",authMiddleware.authUser,upload.single("resume"),intervie
  */
 interviewRouter.post("/resume/pdf/:interviewReportId", authMiddleware.authUser, interviewController.generateResumePdfController)
 
+/**
+ * @route DELETE /api/interview/:interviewId
+ * @description delete an interview report
+ * @access private
+ */
+interviewRouter.delete("/:interviewId", authMiddleware.authUser, interviewController.deleteInterviewReportController)
+
+/**
+ * @route PATCH /api/interview/star/:interviewId
+ * @description star/unstar an interview report
+ * @access private
+ */
+interviewRouter.patch("/star/:interviewId", authMiddleware.authUser, interviewController.starInterviewReportController)
 
 module.exports=interviewRouter

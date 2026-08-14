@@ -71,7 +71,7 @@ async function loginUserController(req,res){
     const isPasswordValid =await bycrypt.compare(password,user.password)
 
     if(!isPasswordValid){
-        return res.status(400).json({message:"User not found"})
+        return res.status(400).json({message:"Incorrect password"})
     }
 
     const token=jwt.sign(

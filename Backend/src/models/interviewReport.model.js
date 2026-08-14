@@ -126,6 +126,10 @@ const interviewReportSchema=new mongoose.Schema({
     title:{
         type:String,
         required:[true,"Job Title is required"]
+    },
+    isStarred:{
+        type:Boolean,
+        default:false
     }
 },{
     timestamps:true

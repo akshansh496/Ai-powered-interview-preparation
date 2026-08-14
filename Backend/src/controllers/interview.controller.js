@@ -24,6 +24,12 @@ async function generateInterViewReportController(req,res){
             })
         }
 
+        if (!resumeText && (!selfDescription || !selfDescription.trim())) {
+            return res.status(400).json({
+                message: "Either a resume or self-description is required to generate a personalized plan."
+            })
+        }
+
         const interviewReportByAi = await generateInterviewReport({
             resume: resumeText,
             selfDescription,
@@ -75,7 +81,7 @@ async function getInterviewReportByIdController(req,res){
  * @description Controller to get all interview reports of logged in user
  */
 async function getAllInterviewReportsController(req,res){
-    const interviewReports = await interviewReportModel.find({ user: req.user.id }).sort({ createdAt: -1 }).select("-resume -selfDescription -jobDescription -__v -technicalQuestions -behavioralQuestions -skillGaps -preparationPlan")
+    const interviewReports = await interviewReportModel.find({ user: req.user.id }).sort({ isStarred: -1, createdAt: -1 }).select("-resume -selfDescription -jobDescription -__v -technicalQuestions -behavioralQuestions -skillGaps -preparationPlan")
 
     res.status(200).json({
         message: "Interview reports fetched successfully.",
@@ -113,4 +119,69 @@ async function generateResumePdfController(req, res) {
         })
     }
 }
-module.exports={generateInterViewReportController,getInterviewReportByIdController,getAllInterviewReportsController,generateResumePdfController}
+
+/**
+ * @description Controller to delete an interview report
+ */
+async function deleteInterviewReportController(req, res) {
+    try {
+        const { interviewId } = req.params
+        const deleted = await interviewReportModel.findOneAndDelete({ _id: interviewId, user: req.user.id })
+        if (!deleted) {
+            return res.status(404).json({
+                message: "Interview plan not found."
+            })
+        }
+        res.status(200).json({
+            message: "Interview plan deleted successfully."
+        })
+    } catch (error) {
+        console.error("Error in deleteInterviewReportController:", error)
+        res.status(500).json({
+            message: "Failed to delete interview plan.",
+            error: error.message
+        })
+    }
+}
+
+/**
+ * @description Controller to toggle star status of an interview report
+ */
+async function starInterviewReportController(req, res) {
+    try {
+        const { interviewId } = req.params
+        const { isStarred } = req.body
+
+        const report = await interviewReportModel.findOneAndUpdate(
+            { _id: interviewId, user: req.user.id },
+            { isStarred: !!isStarred },
+            { new: true }
+        )
+
+        if (!report) {
+            return res.status(404).json({
+                message: "Interview plan not found."
+            })
+        }
+
+        res.status(200).json({
+            message: isStarred ? "Interview plan starred successfully." : "Interview plan unstarred successfully.",
+            interviewReport: report
+        })
+    } catch (error) {
+        console.error("Error in starInterviewReportController:", error)
+        res.status(500).json({
+            message: "Failed to update star status.",
+            error: error.message
+        })
+    }
+}
+
+module.exports={
+    generateInterViewReportController,
+    getInterviewReportByIdController,
+    getAllInterviewReportsController,
+    generateResumePdfController,
+    deleteInterviewReportController,
+    starInterviewReportController
+}

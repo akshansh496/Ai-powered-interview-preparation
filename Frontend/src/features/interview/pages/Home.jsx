@@ -6,7 +6,7 @@ import { useAuth } from "../../auth/hooks/useAuth"
 
 const Home = () => {
 
-    const { loading, loadingMessage, error, setError, generateReport, reports } = useInterview()
+    const { loading, loadingMessage, error, setError, generateReport, reports, deleteReport, toggleStar } = useInterview()
     const { user, handleLogout } = useAuth()
     const [ jobDescription, setJobDescription ] = useState("")
     const [ selfDescription, setSelfDescription ] = useState("")
@@ -16,6 +16,14 @@ const Home = () => {
     const navigate = useNavigate()
 
     const handleGenerateReport = async () => {
+        if (!selectedFile && !selfDescription.trim()) {
+            setError("A resume file or a quick self-description is required to generate a personalized plan.");
+            return;
+        }
+        if (!jobDescription.trim()) {
+            setError("Job description is required.");
+            return;
+        }
         const resumeFile = selectedFile
         try {
             const data = await generateReport({ jobDescription, selfDescription, resumeFile })
@@ -26,6 +34,18 @@ const Home = () => {
             console.error("Report generation failed:", err)
         }
     }
+
+    const handleDelete = (e, id) => {
+        e.stopPropagation();
+        if (confirm("Are you sure you want to delete this interview plan?")) {
+            deleteReport(id);
+        }
+    };
+
+    const handleStarToggle = (e, id, isStarred) => {
+        e.stopPropagation();
+        toggleStar(id, isStarred);
+    };
 
     const handleRemoveFile = (e) => {
         e.preventDefault()
@@ -223,6 +243,22 @@ const Home = () => {
                     <ul className='reports-list'>
                         {reports.map(report => (
                             <li key={report._id} className='report-item' onClick={() => navigate(`/interview/${report._id}`)}>
+                                <div className='report-item__actions'>
+                                    <button 
+                                        className={`star-btn ${report.isStarred ? 'star-btn--active' : ''}`}
+                                        onClick={(e) => handleStarToggle(e, report._id, report.isStarred)}
+                                        title={report.isStarred ? 'Unstar plan' : 'Star plan'}
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill={report.isStarred ? '#EAB308' : 'none'} stroke={report.isStarred ? '#EAB308' : 'currentColor'} strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                                    </button>
+                                    <button 
+                                        className='delete-btn'
+                                        onClick={(e) => handleDelete(e, report._id)}
+                                        title='Delete plan'
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                    </button>
+                                </div>
                                 <h3>{report.title || 'Untitled Position'}</h3>
                                 <p className='report-meta'>Generated on {new Date(report.createdAt).toLocaleDateString()}</p>
                                 <p className={`match-score ${report.matchScore >= 80 ? 'score--high' : report.matchScore >= 60 ? 'score--mid' : 'score--low'}`}>Match Score: {report.matchScore}%</p>

@@ -55,3 +55,19 @@ export const generateResumePdf = async ({ interviewReportId }) => {
 
     return response.data
 }
+
+/**
+ * @description Service to delete an interview report.
+ */
+export const deleteInterviewReport = async (interviewId) => {
+    const response = await api.delete(`/api/interview/${interviewId}`)
+    return response.data
+}
+
+/**
+ * @description Service to star/unstar an interview report.
+ */
+export const toggleStarInterviewReport = async (interviewId, isStarred) => {
+    const response = await api.patch(`/api/interview/star/${interviewId}`, { isStarred })
+    return response.data
+}

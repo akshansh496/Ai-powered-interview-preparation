@@ -43,6 +43,8 @@ test.describe('Interview Preparation App E2E Tests', () => {
             interviewReport: { _id: '2', title: 'New Plan', matchScore: 90 }
           }),
         });
+      } else {
+        await route.fallback();
       }
     });
 
@@ -77,6 +79,8 @@ test.describe('Interview Preparation App E2E Tests', () => {
             message: 'Server failed to process job description.'
           }),
         });
+      } else {
+        await route.fallback();
       }
     });
 
@@ -137,5 +141,116 @@ test.describe('Interview Preparation App E2E Tests', () => {
     const loadingSubText = page.locator('.loading-text p');
     await expect(loadingText).toHaveText('Preparing Resume');
     await expect(loadingSubText).toHaveText('Formatting and compiling your customized resume PDF...');
+  });
+
+  test('should display validation and credentials error on Login page', async ({ page }) => {
+    // Intercept login requests to fail on incorrect credentials
+    await page.route('**/api/auth/login', async (route) => {
+      await route.fulfill({
+        status: 400,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Incorrect password' }),
+      });
+    });
+
+    // Make me() call fail to force login view redirection
+    await page.route('**/api/auth/me', async (route) => {
+      await route.fulfill({
+        status: 401,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Unauthorized' }),
+      });
+    });
+
+    await page.goto('/');
+    await page.waitForURL('**/login');
+
+    // Test empty fields check
+    await page.click('button:has-text("Login")');
+    await expect(page.locator('.auth-error-banner')).toHaveText('Email field is required');
+
+    await page.fill('#email', 'test@example.com');
+    await page.click('button:has-text("Login")');
+    await expect(page.locator('.auth-error-banner')).toHaveText('Password field is required');
+
+    // Test server response error (wrong password)
+    await page.fill('#password', 'wrongpassword');
+    await page.click('button:has-text("Login")');
+    await expect(page.locator('.auth-error-banner')).toHaveText('Incorrect password');
+  });
+
+  test('should require a resume or self-description on generation attempt', async ({ page }) => {
+    await page.goto('/');
+    
+    // Attempt generation with blank fields
+    await page.fill('.panel--left textarea', 'Senior Software Engineer');
+    await page.click('.generate-btn');
+
+    // Asserts that the glassmorphic custom error boundary catches it
+    await expect(page.locator('.error-screen h2')).toHaveText('Something Went Wrong');
+    await expect(page.locator('.error-screen p')).toContainText('A resume file or a quick self-description is required to generate a personalized plan.');
+
+    // Click Try Again
+    await page.click('.error-actions button');
+    await expect(page.locator('h1')).toContainText('Create Your Custom');
+  });
+
+  test('should support starring and deleting plans from the dashboard', async ({ page }) => {
+    // Intercept star status update API
+    let starStatus = false;
+    await page.route('**/api/interview/star/1', async (route, request) => {
+      if (request.method() === 'PATCH') {
+        const body = JSON.parse(request.postData());
+        starStatus = body.isStarred;
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            message: 'Star status updated',
+            interviewReport: { _id: '1', title: 'Recent Plan', isStarred: starStatus }
+          }),
+        });
+      }
+    });
+
+    // Intercept delete report API
+    await page.route('**/api/interview/1', async (route, request) => {
+      if (request.method() === 'DELETE') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ message: 'Interview plan deleted successfully.' }),
+        });
+      }
+    });
+
+    await page.goto('/');
+
+    // Verify Star toggles state and updates class
+    const starBtn = page.locator('.star-btn');
+    await expect(starBtn).not.toHaveClass(/star-btn--active/);
+
+    // Star the plan
+    await starBtn.click();
+    await expect(starBtn).toHaveClass(/star-btn--active/);
+    expect(starStatus).toBe(true);
+
+    // Unstar the plan
+    await starBtn.click();
+    await expect(starBtn).not.toHaveClass(/star-btn--active/);
+    expect(starStatus).toBe(false);
+
+    // Trigger delete confirmation prompt stub
+    page.on('dialog', async dialog => {
+      expect(dialog.message()).toContain('Are you sure you want to delete this interview plan?');
+      await dialog.accept();
+    });
+
+    // Hover over plan list item to make delete button visible, then click
+    await page.hover('.report-item');
+    await page.click('.delete-btn');
+
+    // Verify card is removed from reports list
+    await expect(page.locator('.recent-reports')).toHaveCount(0);
   });
 });

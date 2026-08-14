@@ -10,12 +10,28 @@ const Login=() => {
 
     const[email,setEmail] = useState('');
     const[password,setPassword] = useState('');
-
+    const[error,setError] = useState('');
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        await handleLogin({email,password});
-        navigate('/'); 
+        if (!email.trim()) {
+            setError("Email field is required");
+            return;
+        }
+        if (!password.trim()) {
+            setError("Password field is required");
+            return;
+        }
+        setError('');
+        try {
+            const user = await handleLogin({email,password});
+            if (user) {
+                navigate('/');
+            }
+        } catch (err) {
+            const errMsg = err.response?.data?.message || err.message || "Failed to log in";
+            setError(errMsg);
+        }
     }
 
     if (loading) {
@@ -44,6 +60,21 @@ const Login=() => {
         <main>
             <div className="form-container">
                 <h1>Login</h1>
+                {error && (
+                    <div className="auth-error-banner" style={{
+                        backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                        border: '1px solid rgba(239, 68, 68, 0.35)',
+                        borderRadius: '0.375rem',
+                        color: '#FCA5A5',
+                        fontSize: '0.875rem',
+                        padding: '0.75rem',
+                        marginBottom: '1rem',
+                        textAlign: 'center',
+                        fontWeight: '600'
+                    }}>
+                        {error}
+                    </div>
+                )}
                 <form onSubmit={handleSubmit}>
                     <div className="input-group">
                         <label htmlFor='email'>Email</label>
