@@ -414,7 +414,7 @@ $font-stack: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 
 
         .report-item__actions {
             position: absolute;
-            top: 0.85rem;
+            bottom: 0.85rem;
             right: 0.85rem;
             display: flex;
             gap: 0.35rem;
