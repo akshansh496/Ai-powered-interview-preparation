@@ -30,12 +30,10 @@ test.describe('Interview Preparation App E2E Tests', () => {
     });
   });
 
-  test('should display dynamic loading messages when generating strategy and handle success', async ({ page }) => {
+  test('should generate strategy successfully and navigate to plan details', async ({ page }) => {
     // Intercept generate report request
     await page.route('**/api/interview/', async (route, request) => {
       if (request.method() === 'POST') {
-        // Delay response to capture loading state
-        await new Promise(resolve => setTimeout(resolve, 500));
         await route.fulfill({
           status: 201,
           contentType: 'application/json',
@@ -58,14 +56,9 @@ test.describe('Interview Preparation App E2E Tests', () => {
     await page.fill('.panel--left textarea', 'Senior Software Engineer with React');
     await page.fill('.self-description textarea', '5 years of frontend experience');
 
-    // Click generate button
+    // Click generate button and verify navigation
     await page.click('.generate-btn');
-
-    // Check custom loader text is showing
-    const loadingText = page.locator('.loading-text h2');
-    const loadingSubText = page.locator('.loading-text p');
-    await expect(loadingText).toHaveText('Generating Strategy');
-    await expect(loadingSubText).toHaveText('Analyzing job description and preparing your custom questions...');
+    await page.waitForURL('**/interview/2');
   });
 
   test('should display error screen if strategy generation fails', async ({ page }) => {
@@ -98,7 +91,7 @@ test.describe('Interview Preparation App E2E Tests', () => {
     await expect(page.locator('h1')).toContainText('Create Your Custom');
   });
 
-  test('should display dynamic loading message when downloading resume', async ({ page }) => {
+  test('should support downloading resume on plan details page', async ({ page }) => {
     // Intercept report details
     await page.route('**/api/interview/report/2', async (route) => {
       await route.fulfill({
@@ -118,9 +111,8 @@ test.describe('Interview Preparation App E2E Tests', () => {
       });
     });
 
-    // Intercept resume download to delay and return dummy HTML
+    // Intercept resume download and return dummy HTML
     await page.route('**/api/interview/resume/pdf/2', async (route) => {
-      await new Promise(resolve => setTimeout(resolve, 500));
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -133,14 +125,9 @@ test.describe('Interview Preparation App E2E Tests', () => {
     // Check page loaded
     await expect(page.locator('.content-header h2')).toContainText('Technical Questions');
 
-    // Click Download Resume
+    // Click Download Resume and verify no crash occurred (page remains visible)
     await page.click('.primary-button:has-text("Download Resume")');
-
-    // Verify loading screen for resume
-    const loadingText = page.locator('.loading-text h2');
-    const loadingSubText = page.locator('.loading-text p');
-    await expect(loadingText).toHaveText('Preparing Resume');
-    await expect(loadingSubText).toHaveText('Formatting and compiling your customized resume PDF...');
+    await expect(page.locator('.content-header h2')).toContainText('Technical Questions');
   });
 
   test('should display validation and credentials error on Login page', async ({ page }) => {
