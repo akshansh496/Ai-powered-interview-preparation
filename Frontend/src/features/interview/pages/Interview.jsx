@@ -211,7 +211,7 @@ const Interview = () => {
                         <section>
                             <div className='content-header'>
                                 <h2>Preparation Road Map</h2>
-                                <span className='content-header__count'>{report.preparationPlan.length}-day plan</span>
+                                <span className='content-header__count'>{report.preparationPlan.length}-DAY PLAN</span>
                             </div>
                             <div className='roadmap-list'>
                                 {report.preparationPlan.map((day) => (

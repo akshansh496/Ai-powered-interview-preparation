@@ -19,12 +19,15 @@ api.interceptors.request.use((config) => {
 /**
  * @description Service to generate interview report based on user self description, resume and job description.
  */
-export const generateInterviewReport = async ({ jobDescription, selfDescription, resumeFile }) => {
+export const generateInterviewReport = async ({ jobDescription, selfDescription, resumeFile, daysUntilInterview }) => {
 
     const formData = new FormData()
     formData.append("jobDescription", jobDescription)
     formData.append("selfDescription", selfDescription)
     formData.append("resume", resumeFile)
+    if (daysUntilInterview !== undefined && daysUntilInterview !== null && daysUntilInterview !== "") {
+        formData.append("daysUntilInterview", daysUntilInterview)
+    }
 
     const response = await api.post("/api/interview/", formData, {
         headers: {

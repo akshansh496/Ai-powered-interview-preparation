@@ -110,6 +110,9 @@ const interviewReportSchema=new mongoose.Schema({
     selfDescription:{
         type:String,
     },
+    daysUntilInterview:{
+        type:Number
+    },
     matchScore:{
         type:Number,
         min:0,

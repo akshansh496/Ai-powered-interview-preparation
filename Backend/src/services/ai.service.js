@@ -26,20 +26,25 @@ const interviewReportSchema = z.object({
         severity: z.enum([ "low", "medium", "high" ]).describe("The severity of this skill gap, i.e. how important is this skill for the job and how much it can impact the candidate's chances")
     })).describe("List of skill gaps in the candidate's profile along with their severity"),
     preparationPlan: z.array(z.object({
-        day: z.number().describe("The day number in the preparation plan, starting from 1"),
+        day: z.number().describe("The day number in the preparation plan, starting from 1. If daysUntilInterview is specified, the preparationPlan array must contain exactly that number of entries."),
         focus: z.string().describe("The main focus of this day in the preparation plan, e.g. data structures, system design, mock interviews etc."),
         tasks: z.array(z.string()).describe("List of tasks to be done on this day to follow the preparation plan, e.g. read a specific book or article, solve a set of problems, watch a video etc.")
     })).describe("A day-wise preparation plan for the candidate to follow in order to prepare for the interview effectively"),
     title: z.string().describe("The title of the job for which the interview report is generated"),
 })
 
-async function generateInterviewReport({ resume, selfDescription, jobDescription }) {
+async function generateInterviewReport({ resume, selfDescription, jobDescription, daysUntilInterview }) {
 
+    const timingInstruction = daysUntilInterview
+        ? `The candidate has exactly ${daysUntilInterview} day(s) until their actual interview. The preparationPlan array MUST contain exactly ${daysUntilInterview} entries (one per day, day 1 through day ${daysUntilInterview}), with the workload and topic depth per day scaled realistically to fit that timeframe. If the timeframe is very short (1-2 days), prioritize only the highest-impact topics and skip lower-priority skill gaps rather than cramming everything in.`
+        : `The candidate has not specified a deadline. Generate a sensible default preparation plan (typically 5-7 days) covering all identified skill gaps at a reasonable pace.`;
 
     const prompt = `Generate an interview report for a candidate with the following details:
                         Resume: ${resume}
                         Self Description: ${selfDescription}
                         Job Description: ${jobDescription}
+
+                        ${timingInstruction}
 `
 
     const response = await ai.models.generateContent({

@@ -26,7 +26,7 @@ export const useInterview = () => {
         setReports 
     } = context
 
-    const generateReport = async ({ jobDescription, selfDescription, resumeFile }) => {
+    const generateReport = async ({ jobDescription, selfDescription, resumeFile, daysUntilInterview }) => {
         setError(null)
         setLoading(true)
         setLoadingMessage({
@@ -35,7 +35,7 @@ export const useInterview = () => {
         })
         let response = null
         try {
-            response = await generateInterviewReport({ jobDescription, selfDescription, resumeFile })
+            response = await generateInterviewReport({ jobDescription, selfDescription, resumeFile, daysUntilInterview })
             if (response && response.interviewReport) {
                 setReport(response.interviewReport)
             } else {

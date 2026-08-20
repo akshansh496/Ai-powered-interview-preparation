@@ -30,10 +30,19 @@ async function generateInterViewReportController(req,res){
             })
         }
 
+        let daysUntilInterview = undefined
+        if (req.body.daysUntilInterview !== undefined && req.body.daysUntilInterview !== null && req.body.daysUntilInterview !== "") {
+            const parsed = Number(req.body.daysUntilInterview)
+            if (!isNaN(parsed) && parsed > 0) {
+                daysUntilInterview = parsed
+            }
+        }
+
         const interviewReportByAi = await generateInterviewReport({
             resume: resumeText,
             selfDescription,
-            jobDescription
+            jobDescription,
+            daysUntilInterview
         })
 
         const interviewReport = await interviewReportModel.create({
@@ -41,6 +50,7 @@ async function generateInterViewReportController(req,res){
             resume: resumeText,
             selfDescription,
             jobDescription,
+            daysUntilInterview,
             ...interviewReportByAi
         })
 
