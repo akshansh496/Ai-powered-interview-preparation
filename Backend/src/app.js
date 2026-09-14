@@ -3,8 +3,9 @@ const cookieParser=require("cookie-parser")
 const cors=require("cors")
 
 const app=express()
-//app.use(express.json()) tells Express to parse the JSON data sent by the client and store the resulting JavaScript object in req.body.
-app.use(express.json())
+// Limit JSON and URL-encoded body payloads to prevent abuse
+app.use(express.json({ limit: "2mb" }))
+app.use(express.urlencoded({ extended: true, limit: "2mb" }))
 app.use(cookieParser())
 let frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
 if (frontendUrl.endsWith("/")) {

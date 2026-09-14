@@ -1,6 +1,6 @@
 const pdfParse=require("pdf-parse")
-const {generateInterviewReport,generateResumePdf}=require("../services/ai.service")
-const interviewReportModel=require("../models//interviewReport.model")
+const { generateInterviewReport, generateResumePdf, AIError } = require("../services/ai.service")
+const interviewReportModel=require("../models/interviewReport.model")
 
 
 
@@ -59,10 +59,12 @@ async function generateInterViewReportController(req,res){
             interviewReport
         })
     } catch (error) {
-        console.error("Error in generateInterViewReportController:", error)
-        res.status(500).json({
-            message: "Failed to generate interview report.",
-            error: error.message
+        console.error("Error in generateInterViewReportController:", error.message)
+        const status = error instanceof AIError ? error.statusCode : 500
+        const message = error instanceof AIError ? error.message : "Failed to generate interview report."
+        res.status(status).json({
+            message,
+            code: error.code || "INTERNAL_ERROR"
         })
     }
 }
@@ -88,15 +90,43 @@ async function getInterviewReportByIdController(req,res){
 }
 
 /**
- * @description Controller to get all interview reports of logged in user
+ * @description Controller to get all interview reports of logged in user with pagination
  */
 async function getAllInterviewReportsController(req,res){
-    const interviewReports = await interviewReportModel.find({ user: req.user.id }).sort({ isStarred: -1, createdAt: -1 }).select("-resume -selfDescription -jobDescription -__v -technicalQuestions -behavioralQuestions -skillGaps -preparationPlan")
+    try {
+        const page = Math.max(1, parseInt(req.query.page, 10) || 1)
+        const limit = Math.max(1, Math.min(100, parseInt(req.query.limit, 10) || 20))
+        const skip = (page - 1) * limit
 
-    res.status(200).json({
-        message: "Interview reports fetched successfully.",
-        interviewReports
-    })
+        const [ interviewReports, total ] = await Promise.all([
+            interviewReportModel.find({ user: req.user.id })
+                .sort({ isStarred: -1, createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .select("-resume -selfDescription -jobDescription -__v -technicalQuestions -behavioralQuestions -skillGaps -preparationPlan"),
+            interviewReportModel.countDocuments({ user: req.user.id })
+        ])
+
+        const totalPages = Math.ceil(total / limit) || 1
+
+        res.status(200).json({
+            message: "Interview reports fetched successfully.",
+            interviewReports,
+            reports: interviewReports,
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages
+            }
+        })
+    } catch (error) {
+        console.error("Error in getAllInterviewReportsController:", error.message)
+        res.status(500).json({
+            message: "Failed to fetch interview reports.",
+            error: error.message
+        })
+    }
 }
 
 /**
@@ -122,10 +152,12 @@ async function generateResumePdfController(req, res) {
             html
         })
     } catch (error) {
-        console.error("Error in generateResumePdfController:", error)
-        res.status(500).json({
-            message: "Failed to generate resume HTML.",
-            error: error.message
+        console.error("Error in generateResumePdfController:", error.message)
+        const status = error instanceof AIError ? error.statusCode : 500
+        const message = error instanceof AIError ? error.message : "Failed to generate resume HTML."
+        res.status(status).json({
+            message,
+            code: error.code || "INTERNAL_ERROR"
         })
     }
 }

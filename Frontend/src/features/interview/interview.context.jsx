@@ -9,6 +9,7 @@ export const InterviewProvider = ({ children }) => {
     const [error, setError] = useState(null)
     const [report, setReport] = useState(null)
     const [reports, setReports] = useState([])
+    const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 1 })
 
     return (
         <InterviewContext.Provider value={{ 
@@ -21,7 +22,9 @@ export const InterviewProvider = ({ children }) => {
             report, 
             setReport, 
             reports, 
-            setReports 
+            setReports,
+            pagination,
+            setPagination
         }}>
             {children}
         </InterviewContext.Provider>
