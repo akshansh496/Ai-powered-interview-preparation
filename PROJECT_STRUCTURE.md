@@ -7,18 +7,42 @@
 
 ## 1. High-Level Architecture Overview
 
-This repository is a full-stack, AI-powered interview preparation platform consisting of two main parts:
-- **`Backend/`**: Node.js & Express REST API powered by MongoDB (Mongoose) and Google Gemini AI (`@google/genai`). Features an abstracted AI service layer with bounded exponential retries, in-memory sliding window rate limiting, compound index database optimization, paginated query handling, and safe error normalization.
-- **`Frontend/`**: Modern React 19 single-page application built with Vite, React Router v7/8, Sass for modular styling, Context API for state management, paginated dashboard history, and Playwright for end-to-end testing.
+This repository is a full-stack, AI-powered interview preparation platform with a **Multi-AI Provider Router** architecture supporting Google Gemini and xAI Grok:
 
+```text
+                              Client Request
+                                    |
+                                    v
+                           Interview Controller
+                                    |
+                                    v
+                               AI Service
+                                    |
+                                    v
+                                AI Router
+                                    |
+                    +---------------+---------------+
+                    |                               |
+                    v                               v
+             Gemini Provider                  Grok Provider
+                    |                               |
+                    v                               v
+             Google Gemini                       xAI Grok
+                    |                               |
+                    +---------------+---------------+
+                                    |
+                                    v
+                              Validated Result
+                                    |
+                                    v
+                                 MongoDB
 ```
-Ai Powered Interview preparation/
-├── Backend/                 # Express API server, Gemini AI integration, MongoDB models & tests
-├── Frontend/                # React 19 + Vite client application & Playwright E2E tests
-├── .agents/rules/           # Custom AI assistant instructions & rules
-├── AGENTS.md                # Agent instruction file ensuring project structure sync
-└── PROJECT_STRUCTURE.md     # Project directory tree & architectural documentation
-```
+
+### Core Architectural Principles
+1. **Provider-Agnostic Controllers**: Controllers interact only with `ai.service.js` and never know which provider or model handles the request.
+2. **Centralized AI Router**: `ai.router.js` manages a provider registry, selects providers based on configuration (`AI_DEFAULT_PROVIDER`), and executes requests with controlled fallback to `AI_FALLBACK_PROVIDER` on transient infrastructure failures (HTTP 429, 503, timeouts).
+3. **Common Provider Contract**: All AI providers implement `AIProvider` (`provider.interface.js`), enforcing uniform capabilities and validation against shared Zod schemas (`interviewReportSchema`, `resumePdfSchema`).
+4. **Resilience & Protection**: In-memory sliding window rate limiting, bounded exponential retry backoff, request timeout guards, and sanitized error normalization (`AIError`) prevent credential leaks.
 
 ---
 
@@ -60,9 +84,14 @@ Ai Powered Interview preparation/
 │   │   └── services/
 │   │       ├── ai.service.js             # Application boundary for AI operations & error normalization
 │   │       └── ai/
-│   │           └── gemini.provider.js    # Gemini SDK encapsulation, structured output, & bounded retry backoff
+│   │           ├── provider.interface.js # Abstract base class defining the AIProvider contract
+│   │           ├── ai.router.js          # Centralized AI router, provider registry, & controlled fallback
+│   │           ├── gemini.provider.js    # Google Gemini provider implementation with bounded retries
+│   │           └── grok.provider.js      # xAI Grok provider implementation with structured Zod output
 │   └── tests/
 │       ├── ai.service.test.js            # Unit tests for error normalization & key sanitization
+│       ├── ai.router.test.js             # Unit tests for router registry, routing, and fallback
+│       ├── grok.provider.test.js         # Unit tests for Grok provider with mocked fetch & schemas
 │       └── rateLimiter.test.js           # Unit tests for in-memory rate limiting and isolation
 │
 └── Frontend/
@@ -122,61 +151,52 @@ Ai Powered Interview preparation/
 - **[server.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/server.js)**: Starts database connection and listens on `process.env.PORT || 3000`.
 - **[src/app.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/app.js)**: Configures Express middleware (2MB body payload protection, cookie parsing, dynamic CORS headers) and mounts route handlers (`/api/auth`, `/api/interview`).
 - **[src/config/database.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/config/database.js)**: Connects to MongoDB using `process.env.MONGO_URI`.
-- **[src/services/ai/gemini.provider.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai/gemini.provider.js)**:
-  - Encapsulates Gemini SDK (`@google/genai`), prompt creation, and Zod structured response schemas.
-  - Implements bounded exponential backoff retries for transient errors (429, 503, network timeouts) using configurable `AI_MAX_RETRIES` and `AI_REQUEST_TIMEOUT_MS`.
-- **[src/services/ai.service.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai.service.js)**:
-  - Serves as the clean application boundary between controllers and AI models.
-  - Defines `AIError` and `normalizeAIError` to map vendor errors to domain errors (`RATE_LIMIT_EXCEEDED`, `PROVIDER_UNAVAILABLE`, `REQUEST_TIMEOUT`, `VALIDATION_ERROR`, `CONFIGURATION_ERROR`) without leaking sensitive credentials or raw stack traces.
+
+#### AI Service & Multi-Provider Layer (`src/services/ai/`)
+- **[provider.interface.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai/provider.interface.js)**:
+  - Abstract base class defining the provider contract (`generateInterviewReport`, `generateResumePdf`, `isAvailable`, `model`).
+- **[ai.router.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai/ai.router.js)**:
+  - Centralized Provider Registry containing `gemini` and `grok`.
+  - Routes tasks based on `AI_DEFAULT_PROVIDER` with optional request-level overrides.
+  - Implements bounded fallback to `AI_FALLBACK_PROVIDER` on transient provider failures (HTTP 429, 503, network timeouts). Prevents fallback loops and rejects fallback for client validation/configuration errors.
+  - Emits lightweight structured execution logs (task, provider, model, success/failure, latency, error category).
+- **[gemini.provider.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai/gemini.provider.js)**:
+  - Google Gemini integration using `@google/genai`. Configurable model via `GEMINI_MODEL` (default: `gemini-3-flash-preview`).
+  - Implements bounded exponential backoff retries and structured Zod schema output.
+- **[grok.provider.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai/grok.provider.js)**:
+  - xAI Grok API integration using standard OpenAI-compatible REST endpoint (`https://api.x.ai/v1/chat/completions`) and native `fetch`.
+  - Configurable model via `GROK_MODEL` (default: `grok-2-latest`) and API key via `XAI_API_KEY`.
+  - Parses and validates structured responses against the shared `interviewReportSchema` and `resumePdfSchema`.
+- **[ai.service.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai.service.js)**:
+  - Application-level boundary for AI operations.
+  - Dispatches calls to `aiRouter.route()`.
+  - Normalizes vendor errors into domain `AIError` instances (`RATE_LIMIT_EXCEEDED`, `PROVIDER_UNAVAILABLE`, `REQUEST_TIMEOUT`, `VALIDATION_ERROR`, `CONFIGURATION_ERROR`) without leaking sensitive credentials or stack traces.
+
+#### Middlewares, Controllers, & Models
 - **[src/middlewares/rateLimiter.middleware.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/middlewares/rateLimiter.middleware.js)**:
-  - In-memory sliding window rate limiter keyed by user ID or client IP.
-  - Protects expensive AI endpoints (`POST /api/interview/` and `POST /api/interview/resume/pdf/:id`).
-  - Configurable via `AI_REQUEST_LIMIT_PER_WINDOW` (default 10) and `AI_RATE_LIMIT_WINDOW_MS` (default 15m).
+  - In-memory sliding window rate limiter keyed by user ID or IP (`AI_REQUEST_LIMIT_PER_WINDOW`, `AI_RATE_LIMIT_WINDOW_MS`).
 - **[src/controllers/interview.controller.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/controllers/interview.controller.js)**:
-  - `generateInterViewReportController`: Parses uploaded PDF or text, calls `ai.service.js`, maps `AIError` to clean HTTP statuses (429, 503, 504, 422, 500), and persists report.
-  - `getInterviewReportByIdController`: Returns full details of an interview report.
-  - `getAllInterviewReportsController`: Fetches paginated reports for logged-in user (`page`, `limit`), sorted by starred status and creation date; returns `{ interviewReports, reports, pagination: { page, limit, total, totalPages } }`.
-  - `generateResumePdfController`: Generates ATS resume HTML with `AIError` status mapping.
-  - `deleteInterviewReportController` & `starInterviewReportController`: Report lifecycle actions.
-- **[src/controllers/auth.controller.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/controllers/auth.controller.js)**:
-  - User registration, login with JWT token set in HTTP-only cookie, logout via token blacklisting, and profile retrieval.
-- **[src/models/](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/models)**:
-  - `interviewReport.model.js`: Stores evaluation reports, match scores, questions, and roadmaps; indexed on `{ user: 1, isStarred: -1, createdAt: -1 }`.
-  - `user.model.js`: User schema with encrypted password storage.
-  - `blacklist.model.js`: Stores invalidated JWT tokens with TTL expiration.
-- **[tests/](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/tests)**:
-  - `ai.service.test.js`: Native node unit tests for error normalization and secret sanitization.
-  - `rateLimiter.test.js`: Unit tests for in-memory rate limiting and isolation.
+  - Handles HTTP requests, calls `ai.service.js`, and maps `AIError` to clean HTTP status codes (429, 503, 504, 422, 500).
+  - Supports paginated report retrieval (`page`, `limit`) returning `{ interviewReports, reports, pagination: { page, limit, total, totalPages } }`.
+- **[src/models/interviewReport.model.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/models/interviewReport.model.js)**:
+  - Stores interview plans and match scores; indexed on `{ user: 1, isStarred: -1, createdAt: -1 }`.
+
+#### Backend Tests (`tests/`)
+- **[ai.service.test.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/tests/ai.service.test.js)**: Unit tests for domain error normalization and API key sanitization.
+- **[ai.router.test.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/tests/ai.router.test.js)**: Unit tests for provider registration, routing overrides, transient error fallback, and fallback loop prevention.
+- **[grok.provider.test.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/tests/grok.provider.test.js)**: Unit tests for xAI Grok provider with mocked fetch, credential validation, and Zod output verification.
+- **[rateLimiter.test.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/tests/rateLimiter.test.js)**: Unit tests for in-memory rate limiting and isolation.
 
 ---
 
 ### 3.2 Frontend (`Frontend/`)
 
-- **[src/main.jsx](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Frontend/src/main.jsx)** & **[src/App.jsx](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Frontend/src/App.jsx)**:
-  - Mounts React DOM with `AuthProvider` and `InterviewProvider` wrapping the `RouterProvider`.
-- **[src/app.routes.jsx](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Frontend/src/app.routes.jsx)**:
-  - Defines routing table (`/login`, `/register`, `/`, `/interview/:interviewId`).
-- **Feature Modules (`src/features/`)**:
-  - **`auth/`**:
-    - `auth.context.jsx`, `hooks/useAuth.js`, `pages/Login.jsx`, `pages/Register.jsx`, `services/auth.api.js`.
-  - **`interview/`**:
-    - `interview.context.jsx`: Global interview state with `reports`, `report`, and `pagination`.
-    - `hooks/useInterview.js`: Encapsulates generation, paginated fetching (`getReports(page, limit)`), and page transitions (`changePage`).
-    - `pages/Home.jsx`: Generation form, recent reports list with pagination controls, and empty state indicator.
-    - `pages/Interview.jsx`: Match score, technical & behavioral questions, roadmap, and resume PDF download.
-    - `services/interview.api.js`: Axios client calls supporting query parameters (`page`, `limit`).
-- **Testing (`tests/`)**:
-  - `interview.spec.js`: Playwright E2E test suite covering:
-    1. Report generation success & redirection.
-    2. Generation server error handling & recovery.
-    3. Rate limit (429) error boundary display.
-    4. AI validation (422) error boundary display.
-    5. Plan details & resume download.
-    6. Form authentication & credential errors.
-    7. Input validation requirements (resume or description).
-    8. Plan starring and deletion.
-    9. Multi-page report list pagination navigation.
-    10. Empty state presentation when 0 reports exist.
+- **[src/main.jsx](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Frontend/src/main.jsx)** & **[src/App.jsx](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Frontend/src/App.jsx)**: Mounts React tree with Auth and Interview providers.
+- **[src/features/interview/](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Frontend/src/features/interview)**:
+  - `interview.context.jsx` & `useInterview.js`: Encapsulates generation, paginated fetching, and page state.
+  - `Home.jsx`: Dashboard displaying input form, paginated recent plans list, and empty state indicator.
+  - `Interview.jsx`: Detailed plan view with match score, accordion questions, preparation roadmap, and resume PDF download.
+- **[tests/interview.spec.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Frontend/tests/interview.spec.js)**: 10 Playwright E2E test scenarios covering full user flows.
 
 ---
 
@@ -188,7 +208,13 @@ Ai Powered Interview preparation/
 | `PORT` | Port for the backend Express server | `3000` |
 | `MONGO_URI` | MongoDB connection string | `mongodb://localhost:27017/interview-prep` |
 | `JWT_SECRET` | Secret key used to sign and verify JSON Web Tokens | `your-secret-key` |
-| `GOOGLE_GENAI_API_KEY` | Google Gemini API Key for AI report and resume generation | `AIzaSy...` |
+| `GOOGLE_GENAI_API_KEY` | Google Gemini API Key | `AIzaSy...` |
+| `XAI_API_KEY` | xAI Grok API Key | `xai-...` |
+| `AI_DEFAULT_PROVIDER` | Primary AI provider identifier | `gemini` |
+| `AI_FALLBACK_PROVIDER` | Fallback AI provider identifier | `grok` |
+| `AI_ENABLE_FALLBACK` | Whether transient fallback is active (`true`/`false`) | `true` |
+| `GEMINI_MODEL` | Gemini model name | `gemini-3-flash-preview` |
+| `GROK_MODEL` | xAI Grok model name | `grok-2-latest` |
 | `FRONTEND_URL` | URL of the frontend for CORS configuration | `http://localhost:5173` |
 | `AI_REQUEST_LIMIT_PER_WINDOW` | Maximum AI requests allowed per rate limit window | `10` |
 | `AI_RATE_LIMIT_WINDOW_MS` | Duration of the sliding rate limit window in ms | `900000` (15 mins) |
@@ -197,12 +223,23 @@ Ai Powered Interview preparation/
 
 ---
 
-## 5. Maintenance Protocol
+## 5. How to Add a Future Provider
 
-Whenever files or folders are:
-1. **Created** (e.g. new services, components, pages, utility files, or config files),
-2. **Deleted or Deprecated**,
-3. **Renamed or Relocated**,
-4. **Architecturally Reorganized** (e.g. adding state stores, migration of frameworks),
+Adding a new provider (e.g. OpenAI, Anthropic Claude, DeepSeek, or OpenRouter) requires **zero changes to controllers or frontend code**:
 
-You **must update this file (`PROJECT_STRUCTURE.md`)** to reflect the new tree structure, file links, and descriptions.
+1. **Create Provider Class**:
+   - Create `Backend/src/services/ai/<provider-name>.provider.js`.
+   - Extend `AIProvider` from `provider.interface.js`.
+   - Implement `generateInterviewReport(data, options)` and `generateResumePdf(data, options)`.
+   - Parse and validate output using `interviewReportSchema` and `resumePdfSchema`.
+2. **Register in AI Router**:
+   - In `Backend/src/services/ai/ai.router.js`, import the provider and call:
+     ```javascript
+     this.registerProvider("<provider-name>", <providerInstance>);
+     ```
+3. **Configure Environment Variables**:
+   - Add `<PROVIDER>_API_KEY` and `<PROVIDER>_MODEL` to `.env`.
+4. **Add Unit Tests**:
+   - Create `Backend/tests/<provider-name>.provider.test.js` with mock requests verifying schema conformance.
+5. **Update Routing**:
+   - Switch `AI_DEFAULT_PROVIDER` or `AI_FALLBACK_PROVIDER` to the new provider when desired.

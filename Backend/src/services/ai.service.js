@@ -1,4 +1,4 @@
-const geminiProvider = require("./ai/gemini.provider")
+const aiRouter = require("./ai/ai.router")
 
 /**
  * Custom error class representing normalized AI service errors.
@@ -29,7 +29,7 @@ function normalizeAIError(error) {
     const status = error && (error.status || error.statusCode || (error.response && error.response.status))
 
     // 1. Configuration errors
-    if (code === "CONFIGURATION_ERROR" || lower.includes("api_key") || lower.includes("api key")) {
+    if (code === "CONFIGURATION_ERROR" || lower.includes("api_key") || lower.includes("api key") || lower.includes("xai_api_key")) {
         return new AIError("AI service configuration error. Please contact the administrator.", {
             code: "CONFIGURATION_ERROR",
             statusCode: 500,
@@ -92,16 +92,20 @@ function normalizeAIError(error) {
 }
 
 /**
- * Application boundary for interview report generation.
+ * Application boundary for interview report generation via AI Router.
  */
-async function generateInterviewReport({ resume, selfDescription, jobDescription, daysUntilInterview }) {
+async function generateInterviewReport({ resume, selfDescription, jobDescription, daysUntilInterview }, options = {}) {
     try {
-        return await geminiProvider.generateInterviewReport({
-            resume,
-            selfDescription,
-            jobDescription,
-            daysUntilInterview
-        })
+        return await aiRouter.route(
+            "generateInterviewReport",
+            (provider) => provider.generateInterviewReport({
+                resume,
+                selfDescription,
+                jobDescription,
+                daysUntilInterview
+            }, options),
+            options
+        )
     } catch (error) {
         console.error("AI Service - generateInterviewReport failed:", error.message)
         throw normalizeAIError(error)
@@ -109,15 +113,19 @@ async function generateInterviewReport({ resume, selfDescription, jobDescription
 }
 
 /**
- * Application boundary for resume HTML generation.
+ * Application boundary for resume HTML generation via AI Router.
  */
-async function generateResumePdf({ resume, selfDescription, jobDescription }) {
+async function generateResumePdf({ resume, selfDescription, jobDescription }, options = {}) {
     try {
-        return await geminiProvider.generateResumePdf({
-            resume,
-            selfDescription,
-            jobDescription
-        })
+        return await aiRouter.route(
+            "generateResumePdf",
+            (provider) => provider.generateResumePdf({
+                resume,
+                selfDescription,
+                jobDescription
+            }, options),
+            options
+        )
     } catch (error) {
         console.error("AI Service - generateResumePdf failed:", error.message)
         throw normalizeAIError(error)
@@ -128,5 +136,6 @@ module.exports = {
     generateInterviewReport,
     generateResumePdf,
     normalizeAIError,
-    AIError
+    AIError,
+    aiRouter
 }
