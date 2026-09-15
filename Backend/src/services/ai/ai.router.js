@@ -1,45 +1,27 @@
-const geminiProvider = require("./gemini.provider")
-const grokProvider = require("./grok.provider")
-const { AIProvider } = require("./provider.interface")
+const providerRegistry = require("./provider.registry")
 const { isTransientError } = require("./gemini.provider")
 
 class AIRouter {
-    constructor() {
-        this.registry = new Map()
-        // Register initial supported providers
-        this.registerProvider("gemini", geminiProvider)
-        this.registerProvider("grok", grokProvider)
+    constructor(registry = providerRegistry) {
+        this.registry = registry
     }
 
     /**
      * Registers a new or mock provider into the central registry.
      * @param {string} name - Provider identifier
-     * @param {AIProvider} provider - Instance conforming to AIProvider contract
+     * @param {import("./provider.interface").AIProvider} provider - Instance conforming to AIProvider contract
      */
     registerProvider(name, provider) {
-        if (!name || typeof name !== "string") {
-            throw new Error("Provider name must be a non-empty string.")
-        }
-        if (!provider || typeof provider.generateInterviewReport !== "function") {
-            throw new Error(`Provider '${name}' must implement the AIProvider interface.`)
-        }
-        this.registry.set(name.toLowerCase(), provider)
+        return this.registry.registerProvider(name, provider)
     }
 
     /**
      * Retrieves a provider by name from the registry.
      * @param {string} name
-     * @returns {AIProvider}
+     * @returns {import("./provider.interface").AIProvider}
      */
     getProvider(name) {
-        const normalized = (name || "").toLowerCase()
-        const provider = this.registry.get(normalized)
-        if (!provider) {
-            const error = new Error(`Configured AI provider '${name}' is not registered or supported.`)
-            error.code = "CONFIGURATION_ERROR"
-            throw error
-        }
-        return provider
+        return this.registry.getProvider(name)
     }
 
     /**
@@ -48,7 +30,7 @@ class AIRouter {
      * @returns {boolean}
      */
     hasProvider(name) {
-        return this.registry.has((name || "").toLowerCase())
+        return this.registry.hasProvider(name)
     }
 
     /**

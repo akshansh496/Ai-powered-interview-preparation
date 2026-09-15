@@ -47,10 +47,28 @@ All four phases specified in [INTERVIEWAI_AI_ROUTER_ANTIGRAVITY_SPEC.md](file://
   - **[useInterview.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Frontend/src/features/interview/hooks/useInterview.js)**: Added `pagination` tracking and `changePage(newPage)`.
   - **[Home.jsx](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Frontend/src/features/interview/pages/Home.jsx)** & **[Home.scss](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Frontend/src/features/interview/style/Home.scss)**: Rendered pagination buttons (`Previous`, `Next`, `Page X of Y`) and empty dashboard state.
 
+### Phase 5: Multi-AI Provider Architecture & Router
+- **[provider.interface.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai/provider.interface.js)**:
+  - Abstract base contract for AI providers enforcing `generateInterviewReport`, `generateResumePdf`, `isAvailable`, and `model`.
+- **[provider.registry.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai/provider.registry.js)**:
+  - Central registry containing `gemini` and `grok` with dynamic registration capabilities.
+- **[gemini.provider.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai/gemini.provider.js)**:
+  - Refactored to implement `AIProvider` while preserving bounded retry, timeout handling, and Zod structured output.
+- **[grok.provider.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai/grok.provider.js)**:
+  - xAI Grok provider using standard OpenAI-compatible REST endpoint (`https://api.x.ai/v1/chat/completions`) and native `fetch`.
+  - Configurable model via `GROK_MODEL` (default: `grok-2-latest`) and backend-only `XAI_API_KEY`.
+  - Parsed & validated against shared `interviewReportSchema` and `resumePdfSchema`.
+- **[ai.router.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai/ai.router.js)**:
+  - Centralized task routing based on `AI_DEFAULT_PROVIDER` with request-level override support.
+  - Automatic bounded fallback to `AI_FALLBACK_PROVIDER` (default: `grok`) on transient errors (429, 503, network timeout).
+  - Loop protection and strict prohibition of fallback on validation/configuration errors.
+  - Structured execution logging (task, provider, model, latency, success, errorCategory).
+
 ### Phase 6: Documentation Synchronization
 - **[PROJECT_STRUCTURE.md](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/PROJECT_STRUCTURE.md)**:
   - Updated directory tree with all new files and tests.
   - Documented new components, middleware, and environment variables.
+  - Included step-by-step developer guide for adding future AI providers (OpenAI, Claude, DeepSeek).
 
 ---
 
@@ -59,10 +77,18 @@ All four phases specified in [INTERVIEWAI_AI_ROUTER_ANTIGRAVITY_SPEC.md](file://
 ### Backend Automated Unit Tests
 Executed via native Node test runner (`node --test tests/*.test.js`):
 ```text
-▶ AI Service - normalizeAIError tests (7 tests passed)
-▶ Rate Limiter Middleware tests (3 tests passed)
-ℹ tests 12
-ℹ pass 12
+✔ AIRouter - Provider Registration & Registry tests (3 tests)
+✔ AIRouter - Routing & Execution tests (2 tests)
+✔ AIRouter - Fallback Mechanism tests (4 tests)
+✔ AI Service - normalizeAIError tests (7 tests)
+✔ GrokProvider - Configuration and Availability tests (2 tests)
+✔ GrokProvider - API Execution and Structured Output tests (3 tests)
+✔ AIProvider Interface tests (3 tests)
+✔ ProviderRegistry tests (4 tests)
+✔ Rate Limiter Middleware tests (3 tests)
+
+ℹ tests 40
+ℹ pass 40
 ℹ fail 0
 ```
 
@@ -82,5 +108,6 @@ Running 10 tests using 1 worker
   ✓ 9 should support navigating between pages in the report list
   ✓ 10 should display empty state when user has no interview reports
 
-10 passed (5.5s)
+10 passed (5.7s)
 ```
+

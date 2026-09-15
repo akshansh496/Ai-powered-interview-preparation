@@ -60,6 +60,7 @@ Ai Powered Interview preparation/
 ├── PROJECT_STRUCTURE.md                  # This file (Project tree & module documentation)
 │
 ├── Backend/
+│   ├── .env.example                      # Template of environment variables for server and AI configuration
 │   ├── package.json                      # Backend dependencies & scripts (dev, test via native node runner)
 │   ├── package-lock.json                 # Dependency lockfile
 │   ├── server.js                         # Application entry point (Database connection & HTTP listener)
@@ -85,12 +86,14 @@ Ai Powered Interview preparation/
 │   │       ├── ai.service.js             # Application boundary for AI operations & error normalization
 │   │       └── ai/
 │   │           ├── provider.interface.js # Abstract base class defining the AIProvider contract
-│   │           ├── ai.router.js          # Centralized AI router, provider registry, & controlled fallback
+│   │           ├── provider.registry.js  # Centralized provider registry mapping IDs to AIProvider instances
+│   │           ├── ai.router.js          # Centralized AI router, provider selection, & controlled fallback
 │   │           ├── gemini.provider.js    # Google Gemini provider implementation with bounded retries
 │   │           └── grok.provider.js      # xAI Grok provider implementation with structured Zod output
 │   └── tests/
 │       ├── ai.service.test.js            # Unit tests for error normalization & key sanitization
-│       ├── ai.router.test.js             # Unit tests for router registry, routing, and fallback
+│       ├── ai.router.test.js             # Unit tests for router routing and fallback logic
+│       ├── provider.registry.test.js     # Unit tests for provider interface contract & registry
 │       ├── grok.provider.test.js         # Unit tests for Grok provider with mocked fetch & schemas
 │       └── rateLimiter.test.js           # Unit tests for in-memory rate limiting and isolation
 │
@@ -155,8 +158,11 @@ Ai Powered Interview preparation/
 #### AI Service & Multi-Provider Layer (`src/services/ai/`)
 - **[provider.interface.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai/provider.interface.js)**:
   - Abstract base class defining the provider contract (`generateInterviewReport`, `generateResumePdf`, `isAvailable`, `model`).
+- **[provider.registry.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai/provider.registry.js)**:
+  - Centralized Provider Registry containing default providers `gemini` and `grok`.
+  - Exposes `registerProvider`, `getProvider`, `hasProvider`, and `getRegisteredNames`.
 - **[ai.router.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai/ai.router.js)**:
-  - Centralized Provider Registry containing `gemini` and `grok`.
+  - Centralized AI Router executing tasks via provider registry.
   - Routes tasks based on `AI_DEFAULT_PROVIDER` with optional request-level overrides.
   - Implements bounded fallback to `AI_FALLBACK_PROVIDER` on transient provider failures (HTTP 429, 503, network timeouts). Prevents fallback loops and rejects fallback for client validation/configuration errors.
   - Emits lightweight structured execution logs (task, provider, model, success/failure, latency, error category).
@@ -184,6 +190,7 @@ Ai Powered Interview preparation/
 #### Backend Tests (`tests/`)
 - **[ai.service.test.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/tests/ai.service.test.js)**: Unit tests for domain error normalization and API key sanitization.
 - **[ai.router.test.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/tests/ai.router.test.js)**: Unit tests for provider registration, routing overrides, transient error fallback, and fallback loop prevention.
+- **[provider.registry.test.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/tests/provider.registry.test.js)**: Unit tests for AIProvider abstract contract and ProviderRegistry lookup & registration.
 - **[grok.provider.test.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/tests/grok.provider.test.js)**: Unit tests for xAI Grok provider with mocked fetch, credential validation, and Zod output verification.
 - **[rateLimiter.test.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/tests/rateLimiter.test.js)**: Unit tests for in-memory rate limiting and isolation.
 
