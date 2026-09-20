@@ -247,8 +247,6 @@ const geminiProvider = new GeminiProvider()
 
 module.exports = geminiProvider
 module.exports.GeminiProvider = GeminiProvider
-module.exports.generateInterviewReport = (data, options) => geminiProvider.generateInterviewReport(data, options)
-module.exports.generateResumePdf = (data, options) => geminiProvider.generateResumePdf(data, options)
 module.exports.interviewReportSchema = interviewReportSchema
 module.exports.resumePdfSchema = resumePdfSchema
 module.exports.isTransientError = isTransientError

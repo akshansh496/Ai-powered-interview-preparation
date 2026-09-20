@@ -71,6 +71,21 @@ class AIRouter {
     }
 
     /**
+     * Prints a formatted console banner when an AI provider is selected.
+     * Dynamically reads provider.name and active model (supporting options.model override).
+     */
+    logSelection(provider, options = {}) {
+        const providerName = (provider && provider.name) || "unknown"
+        const selectedModel = options.model || (provider && provider.model) || "unknown"
+
+        console.log("=================================")
+        console.log("AI ROUTER")
+        console.log(`Provider: ${providerName}`)
+        console.log(`Model: ${selectedModel}`)
+        console.log("=================================")
+    }
+
+    /**
      * Emits a lightweight structured log for observability.
      */
     logExecution({ task, provider, model, success, latencyMs, errorCategory = null, isFallback = false }) {
@@ -98,12 +113,15 @@ class AIRouter {
         const primaryProvider = this.getProvider(primaryProviderName)
         const startTime = Date.now()
 
+        // Log selected provider and model immediately before execution
+        this.logSelection(primaryProvider, options)
+
         try {
             const result = await executeFn(primaryProvider)
             this.logExecution({
                 task: taskName,
                 provider: primaryProvider.name,
-                model: primaryProvider.model,
+                model: options.model || primaryProvider.model,
                 success: true,
                 latencyMs: Date.now() - startTime
             })
@@ -113,7 +131,7 @@ class AIRouter {
             this.logExecution({
                 task: taskName,
                 provider: primaryProvider.name,
-                model: primaryProvider.model,
+                model: options.model || primaryProvider.model,
                 success: false,
                 latencyMs: primaryLatency,
                 errorCategory: primaryError.code || primaryError.name || "Error"
@@ -137,12 +155,15 @@ class AIRouter {
             const fallbackProvider = this.getProvider(fallbackName)
             const fallbackStartTime = Date.now()
 
+            // Log fallback provider and model immediately before execution
+            this.logSelection(fallbackProvider, options)
+
             try {
                 const fallbackResult = await executeFn(fallbackProvider)
                 this.logExecution({
                     task: taskName,
                     provider: fallbackProvider.name,
-                    model: fallbackProvider.model,
+                    model: options.model || fallbackProvider.model,
                     success: true,
                     latencyMs: Date.now() - fallbackStartTime,
                     isFallback: true
@@ -152,7 +173,7 @@ class AIRouter {
                 this.logExecution({
                     task: taskName,
                     provider: fallbackProvider.name,
-                    model: fallbackProvider.model,
+                    model: options.model || fallbackProvider.model,
                     success: false,
                     latencyMs: Date.now() - fallbackStartTime,
                     errorCategory: fallbackError.code || fallbackError.name || "Error",

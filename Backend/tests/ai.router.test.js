@@ -179,3 +179,86 @@ test("AIRouter - Fallback Mechanism tests", async (t) => {
         }
     })
 })
+
+test("AIRouter - Provider Selection Console Logging tests", async (t) => {
+
+    await t.test("should dynamically output banner when routing to Gemini", async () => {
+        const router = new AIRouter()
+        const loggedLines = []
+        const originalLog = console.log
+        console.log = (...args) => {
+            loggedLines.push(args.join(" "))
+            originalLog(...args)
+        }
+
+        try {
+            const mockGemini = new MockProvider("gemini", "gemini-3-flash-preview", async () => ({ status: "ok" }))
+            router.registerProvider("gemini", mockGemini)
+
+            await router.route("generateInterviewReport", (p) => p.generateInterviewReport({}), { provider: "gemini" })
+
+            const output = loggedLines.join("\n")
+            assert.ok(output.includes("================================="))
+            assert.ok(output.includes("AI ROUTER"))
+            assert.ok(output.includes("Provider: gemini"))
+            assert.ok(output.includes("Model: gemini-3-flash-preview"))
+        } finally {
+            console.log = originalLog
+        }
+    })
+
+    await t.test("should dynamically output banner when routing to Grok", async () => {
+        const router = new AIRouter()
+        const loggedLines = []
+        const originalLog = console.log
+        console.log = (...args) => {
+            loggedLines.push(args.join(" "))
+            originalLog(...args)
+        }
+
+        try {
+            const mockGrok = new MockProvider("grok", "grok-2-latest", async () => ({ status: "ok" }))
+            router.registerProvider("grok", mockGrok)
+
+            await router.route("generateInterviewReport", (p) => p.generateInterviewReport({}), { provider: "grok" })
+
+            const output = loggedLines.join("\n")
+            assert.ok(output.includes("================================="))
+            assert.ok(output.includes("AI ROUTER"))
+            assert.ok(output.includes("Provider: grok"))
+            assert.ok(output.includes("Model: grok-2-latest"))
+        } finally {
+            console.log = originalLog
+        }
+    })
+
+    await t.test("should log selection for both primary and fallback when fallback occurs", async () => {
+        const router = new AIRouter()
+        const loggedLines = []
+        const originalLog = console.log
+        console.log = (...args) => {
+            loggedLines.push(args.join(" "))
+            originalLog(...args)
+        }
+
+        try {
+            const transientErr = new Error("Gemini 503")
+            transientErr.status = 503
+
+            const mockGemini = new MockProvider("gemini", "gemini-3-flash-preview", async () => { throw transientErr })
+            const mockGrok = new MockProvider("grok", "grok-2-latest", async () => ({ status: "recovered" }))
+
+            router.registerProvider("gemini", mockGemini)
+            router.registerProvider("grok", mockGrok)
+
+            await router.route("generateInterviewReport", (p) => p.generateInterviewReport({}))
+
+            const output = loggedLines.join("\n")
+            assert.ok(output.includes("Provider: gemini"))
+            assert.ok(output.includes("Provider: grok"))
+        } finally {
+            console.log = originalLog
+        }
+    })
+})
+
