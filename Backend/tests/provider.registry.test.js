@@ -4,6 +4,7 @@ const { ProviderRegistry } = require("../src/services/ai/provider.registry")
 const { AIProvider } = require("../src/services/ai/provider.interface")
 const geminiProvider = require("../src/services/ai/gemini.provider")
 const grokProvider = require("../src/services/ai/grok.provider")
+const openrouterProvider = require("../src/services/ai/openrouter.provider")
 
 test("AIProvider Interface tests", async (t) => {
     await t.test("should reject direct instantiation of abstract AIProvider", () => {
@@ -28,15 +29,24 @@ test("AIProvider Interface tests", async (t) => {
         assert.equal(typeof grokProvider.generateResumePdf, "function")
         assert.equal(typeof grokProvider.isAvailable, "function")
     })
+
+    await t.test("openrouterProvider should conform to AIProvider interface", () => {
+        assert.ok(openrouterProvider instanceof AIProvider)
+        assert.equal(openrouterProvider.name, "openrouter")
+        assert.equal(typeof openrouterProvider.generateInterviewReport, "function")
+        assert.equal(typeof openrouterProvider.generateResumePdf, "function")
+        assert.equal(typeof openrouterProvider.isAvailable, "function")
+    })
 })
 
 test("ProviderRegistry tests", async (t) => {
-    await t.test("should initialize with default gemini and grok providers", () => {
+    await t.test("should initialize with default gemini, grok, and openrouter providers", () => {
         const registry = new ProviderRegistry()
         assert.equal(registry.hasProvider("gemini"), true)
         assert.equal(registry.hasProvider("grok"), true)
+        assert.equal(registry.hasProvider("openrouter"), true)
         assert.equal(registry.hasProvider("nonexistent"), false)
-        assert.deepEqual(registry.getRegisteredNames().sort(), ["gemini", "grok"].sort())
+        assert.deepEqual(registry.getRegisteredNames().sort(), ["gemini", "grok", "openrouter"].sort())
     })
 
     await t.test("should register and retrieve a valid custom provider", () => {

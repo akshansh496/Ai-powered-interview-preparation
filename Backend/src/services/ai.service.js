@@ -1,3 +1,4 @@
+const aiGateway = require("./ai/ai.gateway")
 const aiRouter = require("./ai/ai.router")
 
 /**
@@ -92,11 +93,11 @@ function normalizeAIError(error) {
 }
 
 /**
- * Application boundary for interview report generation via AI Router.
+ * Application boundary for interview report generation via AI Gateway.
  */
 async function generateInterviewReport({ resume, selfDescription, jobDescription, daysUntilInterview }, options = {}) {
     try {
-        return await aiRouter.route(
+        return await aiGateway.execute(
             "generateInterviewReport",
             (provider) => provider.generateInterviewReport({
                 resume,
@@ -113,11 +114,11 @@ async function generateInterviewReport({ resume, selfDescription, jobDescription
 }
 
 /**
- * Application boundary for resume HTML generation via AI Router.
+ * Application boundary for resume HTML generation via AI Gateway.
  */
 async function generateResumePdf({ resume, selfDescription, jobDescription }, options = {}) {
     try {
-        return await aiRouter.route(
+        return await aiGateway.execute(
             "generateResumePdf",
             (provider) => provider.generateResumePdf({
                 resume,
@@ -137,5 +138,6 @@ module.exports = {
     generateResumePdf,
     normalizeAIError,
     AIError,
+    aiGateway,
     aiRouter
 }

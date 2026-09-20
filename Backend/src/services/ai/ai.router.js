@@ -1,188 +1,43 @@
+const aiGateway = require("./ai.gateway")
 const providerRegistry = require("./provider.registry")
-const { isTransientError } = require("./gemini.provider")
+const routingEngine = require("./routing.engine")
 
+/**
+ * AIRouter — Backward-compatible wrapper delegating execution to AIGateway.
+ */
 class AIRouter {
-    constructor(registry = providerRegistry) {
-        this.registry = registry
+    constructor(gateway = aiGateway) {
+        this.gateway = gateway
+        this.registry = gateway.registry || providerRegistry
+        this.routingEngine = gateway.routingEngine || routingEngine
     }
 
     /**
      * Registers a new or mock provider into the central registry.
-     * @param {string} name - Provider identifier
-     * @param {import("./provider.interface").AIProvider} provider - Instance conforming to AIProvider contract
      */
     registerProvider(name, provider) {
-        return this.registry.registerProvider(name, provider)
+        return this.gateway.registerProvider(name, provider)
     }
 
     /**
      * Retrieves a provider by name from the registry.
-     * @param {string} name
-     * @returns {import("./provider.interface").AIProvider}
      */
     getProvider(name) {
-        return this.registry.getProvider(name)
+        return this.gateway.getProvider(name)
     }
 
     /**
      * Checks if a provider exists in the registry.
-     * @param {string} name
-     * @returns {boolean}
      */
     hasProvider(name) {
-        return this.registry.hasProvider(name)
+        return this.gateway.hasProvider(name)
     }
 
     /**
-     * Gets the configured default primary provider name.
-     * @returns {string}
-     */
-    getDefaultProviderName() {
-        return process.env.AI_DEFAULT_PROVIDER || "gemini"
-    }
-
-    /**
-     * Gets the configured fallback provider name.
-     * @returns {string}
-     */
-    getFallbackProviderName() {
-        return process.env.AI_FALLBACK_PROVIDER || "grok"
-    }
-
-    /**
-     * Checks whether automatic fallback is enabled.
-     * @returns {boolean}
-     */
-    isFallbackEnabled() {
-        return process.env.AI_ENABLE_FALLBACK !== "false"
-    }
-
-    /**
-     * Determines whether an error qualifies for automatic provider fallback.
-     * Only transient provider infrastructure failures qualify.
-     */
-    isEligibleForFallback(error) {
-        if (!error) return false
-        // Never fallback on application-level or configuration errors
-        if (error.code === "CONFIGURATION_ERROR" || error.code === "VALIDATION_ERROR" || error.code === "INVALID_INPUT") {
-            return false
-        }
-        return isTransientError(error)
-    }
-
-    /**
-     * Prints a formatted console banner when an AI provider is selected.
-     * Dynamically reads provider.name and active model (supporting options.model override).
-     */
-    logSelection(provider, options = {}) {
-        const providerName = (provider && provider.name) || "unknown"
-        const selectedModel = options.model || (provider && provider.model) || "unknown"
-
-        console.log("=================================")
-        console.log("AI ROUTER")
-        console.log(`Provider: ${providerName}`)
-        console.log(`Model: ${selectedModel}`)
-        console.log("=================================")
-    }
-
-    /**
-     * Emits a lightweight structured log for observability.
-     */
-    logExecution({ task, provider, model, success, latencyMs, errorCategory = null, isFallback = false }) {
-        const logEntry = {
-            timestamp: new Date().toISOString(),
-            task,
-            provider,
-            model,
-            success,
-            latencyMs,
-            ...(isFallback ? { fallback: true } : {}),
-            ...(errorCategory ? { errorCategory } : {})
-        }
-        console.log(`[AIRouter] ${JSON.stringify(logEntry)}`)
-    }
-
-    /**
-     * Routes and executes an AI task through the selected provider with controlled fallback.
-     * @param {string} taskName - Name of the task (e.g. 'generateInterviewReport', 'generateResumePdf')
-     * @param {Function} executeFn - Function taking (provider) and returning a promise
-     * @param {Object} [options] - Optional execution options (e.g. { provider: 'grok', model: '...' })
+     * Routes and executes an AI task through the AI Gateway.
      */
     async route(taskName, executeFn, options = {}) {
-        const primaryProviderName = options.provider || this.getDefaultProviderName()
-        const primaryProvider = this.getProvider(primaryProviderName)
-        const startTime = Date.now()
-
-        // Log selected provider and model immediately before execution
-        this.logSelection(primaryProvider, options)
-
-        try {
-            const result = await executeFn(primaryProvider)
-            this.logExecution({
-                task: taskName,
-                provider: primaryProvider.name,
-                model: options.model || primaryProvider.model,
-                success: true,
-                latencyMs: Date.now() - startTime
-            })
-            return result
-        } catch (primaryError) {
-            const primaryLatency = Date.now() - startTime
-            this.logExecution({
-                task: taskName,
-                provider: primaryProvider.name,
-                model: options.model || primaryProvider.model,
-                success: false,
-                latencyMs: primaryLatency,
-                errorCategory: primaryError.code || primaryError.name || "Error"
-            })
-
-            const fallbackName = this.getFallbackProviderName()
-            const canFallback =
-                this.isFallbackEnabled() &&
-                this.hasProvider(fallbackName) &&
-                fallbackName.toLowerCase() !== primaryProvider.name.toLowerCase() &&
-                this.isEligibleForFallback(primaryError)
-
-            if (!canFallback) {
-                throw primaryError
-            }
-
-            console.warn(
-                `[AIRouter] Primary provider '${primaryProvider.name}' failed (${primaryError.message}). Initiating fallback to '${fallbackName}'...`
-            )
-
-            const fallbackProvider = this.getProvider(fallbackName)
-            const fallbackStartTime = Date.now()
-
-            // Log fallback provider and model immediately before execution
-            this.logSelection(fallbackProvider, options)
-
-            try {
-                const fallbackResult = await executeFn(fallbackProvider)
-                this.logExecution({
-                    task: taskName,
-                    provider: fallbackProvider.name,
-                    model: options.model || fallbackProvider.model,
-                    success: true,
-                    latencyMs: Date.now() - fallbackStartTime,
-                    isFallback: true
-                })
-                return fallbackResult
-            } catch (fallbackError) {
-                this.logExecution({
-                    task: taskName,
-                    provider: fallbackProvider.name,
-                    model: options.model || fallbackProvider.model,
-                    success: false,
-                    latencyMs: Date.now() - fallbackStartTime,
-                    errorCategory: fallbackError.code || fallbackError.name || "Error",
-                    isFallback: true
-                })
-                // Both providers failed; rethrow the primary error (or fallback if it provides more insight)
-                throw fallbackError
-            }
-        }
+        return this.gateway.execute(taskName, executeFn, options)
     }
 }
 
@@ -190,3 +45,4 @@ const aiRouter = new AIRouter()
 
 module.exports = aiRouter
 module.exports.AIRouter = AIRouter
+

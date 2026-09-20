@@ -1,6 +1,7 @@
 const { AIProvider } = require("./provider.interface")
 const geminiProvider = require("./gemini.provider")
 const grokProvider = require("./grok.provider")
+const openrouterProvider = require("./openrouter.provider")
 
 /**
  * Central registry mapping provider identifiers to AIProvider instances.
@@ -11,6 +12,7 @@ class ProviderRegistry {
         // Register default supported providers
         this.registerProvider("gemini", geminiProvider)
         this.registerProvider("grok", grokProvider)
+        this.registerProvider("openrouter", openrouterProvider)
     }
 
     /**
@@ -60,6 +62,14 @@ class ProviderRegistry {
      */
     getRegisteredNames() {
         return Array.from(this.providers.keys())
+    }
+
+    /**
+     * Returns an array of all registered provider instances.
+     * @returns {AIProvider[]}
+     */
+    getAllProviders() {
+        return Array.from(this.providers.values())
     }
 }
 
