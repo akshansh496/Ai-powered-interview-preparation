@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import "../style/Home.scss"
 import { useInterview } from '../hooks/useInterview.js'
 import { useNavigate } from 'react-router-dom'
@@ -6,7 +6,7 @@ import { useAuth } from "../../auth/hooks/useAuth"
 
 const Home = () => {
 
-    const { loading, loadingMessage, error, setError, generateReport, reports, deleteReport, toggleStar } = useInterview()
+    const { loading, loadingMessage, error, setError, generateReport, getReports, reports, pagination, changePage, deleteReport, toggleStar } = useInterview()
     const { user, handleLogout } = useAuth()
     const [ jobDescription, setJobDescription ] = useState("")
     const [ selfDescription, setSelfDescription ] = useState("")
@@ -15,6 +15,10 @@ const Home = () => {
     const resumeInputRef = useRef()
 
     const navigate = useNavigate()
+
+    useEffect(() => {
+        getReports()
+    }, [])
 
     const handleGenerateReport = async () => {
         if (!selectedFile && !selfDescription.trim()) {
@@ -254,7 +258,7 @@ const Home = () => {
             </div>
 
             {/* Recent Reports List */}
-            {reports.length > 0 && (
+            {reports.length > 0 ? (
                 <section className='recent-reports'>
                     <h2>My Recent Interview Plans</h2>
                     <ul className='reports-list'>
@@ -282,7 +286,36 @@ const Home = () => {
                             </li>
                         ))}
                     </ul>
+
+                    {/* Pagination Controls */}
+                    {pagination && pagination.totalPages > 1 && (
+                        <div className='reports-pagination'>
+                            <button
+                                className='pagination-btn'
+                                disabled={pagination.page <= 1}
+                                onClick={() => changePage(pagination.page - 1)}
+                                aria-label='Previous Page'
+                            >
+                                &larr; Previous
+                            </button>
+                            <span className='pagination-info'>
+                                Page {pagination.page} of {pagination.totalPages}
+                            </span>
+                            <button
+                                className='pagination-btn'
+                                disabled={pagination.page >= pagination.totalPages}
+                                onClick={() => changePage(pagination.page + 1)}
+                                aria-label='Next Page'
+                            >
+                                Next &rarr;
+                            </button>
+                        </div>
+                    )}
                 </section>
+            ) : (
+                <div className='empty-reports-state'>
+                    <p>No saved interview plans yet. Generate your personalized strategy above to get started!</p>
+                </div>
             )}
 
             {/* Page Footer */}

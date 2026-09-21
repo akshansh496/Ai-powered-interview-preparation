@@ -138,5 +138,8 @@ const interviewReportSchema=new mongoose.Schema({
     timestamps:true
 })
 
+// Compound index to optimize dashboard retrieval sorted by star status and creation date
+interviewReportSchema.index({ user: 1, isStarred: -1, createdAt: -1 });
+
 const interviewReportModel=mongoose.model("interviewReport",interviewReportSchema)
 module.exports=interviewReportModel;

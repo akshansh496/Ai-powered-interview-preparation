@@ -51,10 +51,14 @@ export const getInterviewReportById = async (interviewId) => {
 
 
 /**
- * @description Service to get all interview reports of logged in user.
+ * @description Service to get all interview reports of logged in user with pagination.
  */
-export const getAllInterviewReports = async () => {
-    const response = await api.get("/api/interview/")
+export const getAllInterviewReports = async (page, limit) => {
+    const params = {}
+    if (page !== undefined && page !== null) params.page = page
+    if (limit !== undefined && limit !== null) params.limit = limit
+
+    const response = await api.get("/api/interview/", Object.keys(params).length > 0 ? { params } : undefined)
 
     return response.data
 }

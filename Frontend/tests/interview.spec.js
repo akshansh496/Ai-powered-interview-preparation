@@ -12,8 +12,8 @@ test.describe('Interview Preparation App E2E Tests', () => {
       });
     });
 
-    // Intercept fetch dashboard reports
-    await page.route('**/api/interview/', async (route, request) => {
+    // Intercept fetch dashboard reports (matches /api/interview/ and /api/interview/?page=1&limit=20)
+    await page.route(/\/api\/interview\/?(\?.*)?$/, async (route, request) => {
       if (request.method() === 'GET') {
         await route.fulfill({
           status: 200,
@@ -21,7 +21,16 @@ test.describe('Interview Preparation App E2E Tests', () => {
           body: JSON.stringify({
             interviewReports: [
               { _id: '1', title: 'Recent Plan', matchScore: 85, createdAt: new Date().toISOString() }
-            ]
+            ],
+            reports: [
+              { _id: '1', title: 'Recent Plan', matchScore: 85, createdAt: new Date().toISOString() }
+            ],
+            pagination: {
+              page: 1,
+              limit: 20,
+              total: 1,
+              totalPages: 1
+            }
           }),
         });
       } else {
@@ -32,7 +41,7 @@ test.describe('Interview Preparation App E2E Tests', () => {
 
   test('should generate strategy successfully and navigate to plan details', async ({ page }) => {
     // Intercept generate report request
-    await page.route('**/api/interview/', async (route, request) => {
+    await page.route(/\/api\/interview\/?(\?.*)?$/, async (route, request) => {
       if (request.method() === 'POST') {
         await route.fulfill({
           status: 201,
@@ -63,7 +72,7 @@ test.describe('Interview Preparation App E2E Tests', () => {
 
   test('should display error screen if strategy generation fails', async ({ page }) => {
     // Intercept generate report request to throw error
-    await page.route('**/api/interview/', async (route, request) => {
+    await page.route(/\/api\/interview\/?(\?.*)?$/, async (route, request) => {
       if (request.method() === 'POST') {
         await route.fulfill({
           status: 500,
@@ -89,6 +98,60 @@ test.describe('Interview Preparation App E2E Tests', () => {
     // Click Try Again to go back to inputs
     await page.click('.error-actions button');
     await expect(page.locator('h1')).toContainText('Create Your Custom');
+  });
+
+  test('should display rate-limit error screen when AI generation rate limit is exceeded', async ({ page }) => {
+    // Intercept generation request with HTTP 429 Rate Limit
+    await page.route(/\/api\/interview\/?(\?.*)?$/, async (route, request) => {
+      if (request.method() === 'POST') {
+        await route.fulfill({
+          status: 429,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            message: 'Too many AI generation requests. Please wait a few minutes before trying again.',
+            retryAfter: 60
+          }),
+        });
+      } else {
+        await route.fallback();
+      }
+    });
+
+    await page.goto('/');
+    await page.fill('.panel--left textarea', 'Senior Engineer');
+    await page.fill('.self-description textarea', 'Experienced Engineer');
+    await page.click('.generate-btn');
+
+    // Verify rate limit error screen
+    await expect(page.locator('.error-screen h2')).toHaveText('Something Went Wrong');
+    await expect(page.locator('.error-screen p')).toContainText('Too many AI generation requests.');
+  });
+
+  test('should handle AI validation failure and display helpful error', async ({ page }) => {
+    // Intercept generation request with 422 validation failure
+    await page.route(/\/api\/interview\/?(\?.*)?$/, async (route, request) => {
+      if (request.method() === 'POST') {
+        await route.fulfill({
+          status: 422,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            message: 'AI response did not meet required format standards. Please refine your inputs and try again.',
+            code: 'VALIDATION_ERROR'
+          }),
+        });
+      } else {
+        await route.fallback();
+      }
+    });
+
+    await page.goto('/');
+    await page.fill('.panel--left textarea', 'Senior Engineer');
+    await page.fill('.self-description textarea', 'Experienced Engineer');
+    await page.click('.generate-btn');
+
+    // Verify validation failure screen
+    await expect(page.locator('.error-screen h2')).toHaveText('Something Went Wrong');
+    await expect(page.locator('.error-screen p')).toContainText('AI response did not meet required format standards.');
   });
 
   test('should support downloading resume on plan details page', async ({ page }) => {
@@ -239,5 +302,69 @@ test.describe('Interview Preparation App E2E Tests', () => {
 
     // Verify card is removed from reports list
     await expect(page.locator('.recent-reports')).toHaveCount(0);
+  });
+
+  test('should support navigating between pages in the report list', async ({ page }) => {
+    // Intercept with paginated multi-page response
+    await page.route(/\/api\/interview\/?(\?.*)?$/, async (route, request) => {
+      const url = new URL(request.url());
+      const pageParam = url.searchParams.get('page') || '1';
+
+      if (pageParam === '1') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            interviewReports: [
+              { _id: 'p1-1', title: 'Page 1 First Plan', matchScore: 80, createdAt: new Date().toISOString() }
+            ],
+            pagination: { page: 1, limit: 1, total: 2, totalPages: 2 }
+          }),
+        });
+      } else {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            interviewReports: [
+              { _id: 'p2-1', title: 'Page 2 Second Plan', matchScore: 95, createdAt: new Date().toISOString() }
+            ],
+            pagination: { page: 2, limit: 1, total: 2, totalPages: 2 }
+          }),
+        });
+      }
+    });
+
+    await page.goto('/');
+
+    // Verify page 1 content and pagination controls
+    await expect(page.locator('.recent-reports')).toContainText('Page 1 First Plan');
+    await expect(page.locator('.pagination-info')).toContainText('Page 1 of 2');
+
+    // Click Next page
+    await page.click('.pagination-btn:has-text("Next")');
+    await expect(page.locator('.recent-reports')).toContainText('Page 2 Second Plan');
+    await expect(page.locator('.pagination-info')).toContainText('Page 2 of 2');
+  });
+
+  test('should display empty state when user has no interview reports', async ({ page }) => {
+    // Intercept with empty reports list
+    await page.route(/\/api\/interview\/?(\?.*)?$/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          interviewReports: [],
+          reports: [],
+          pagination: { page: 1, limit: 20, total: 0, totalPages: 1 }
+        }),
+      });
+    });
+
+    await page.goto('/');
+
+    // Verify recent-reports section is absent and empty state is rendered
+    await expect(page.locator('.recent-reports')).toHaveCount(0);
+    await expect(page.locator('.empty-reports-state')).toContainText('No saved interview plans yet.');
   });
 });

@@ -1,101 +1,143 @@
-const { GoogleGenAI } = require("@google/genai")
-const { z } = require("zod")
-const { zodToJsonSchema } = require("zod-to-json-schema")
+const aiGateway = require("./ai/ai.gateway")
+const aiRouter = require("./ai/ai.router")
 
-
-
-const ai = new GoogleGenAI({
-    apiKey: process.env.GOOGLE_GENAI_API_KEY
-})
-
-
-const interviewReportSchema = z.object({
-    matchScore: z.number().describe("A score between 0 and 100 indicating how well the candidate's profile matches the job describe"),
-    technicalQuestions: z.array(z.object({
-        question: z.string().describe("The technical question can be asked in the interview"),
-        intention: z.string().describe("The intention of interviewer behind asking this question"),
-        answer: z.string().describe("How to answer this question, what points to cover, what approach to take etc.")
-    })).describe("Technical questions that can be asked in the interview along with their intention and how to answer them"),
-    behavioralQuestions: z.array(z.object({
-        question: z.string().describe("The technical question can be asked in the interview"),
-        intention: z.string().describe("The intention of interviewer behind asking this question"),
-        answer: z.string().describe("How to answer this question, what points to cover, what approach to take etc.")
-    })).describe("Behavioral questions that can be asked in the interview along with their intention and how to answer them"),
-    skillGaps: z.array(z.object({
-        skill: z.string().describe("The skill which the candidate is lacking"),
-        severity: z.enum([ "low", "medium", "high" ]).describe("The severity of this skill gap, i.e. how important is this skill for the job and how much it can impact the candidate's chances")
-    })).describe("List of skill gaps in the candidate's profile along with their severity"),
-    preparationPlan: z.array(z.object({
-        day: z.number().describe("The day number in the preparation plan, starting from 1. If daysUntilInterview is specified, the preparationPlan array must contain exactly that number of entries."),
-        focus: z.string().describe("The main focus of this day in the preparation plan, e.g. data structures, system design, mock interviews etc."),
-        tasks: z.array(z.string()).describe("List of tasks to be done on this day to follow the preparation plan, e.g. read a specific book or article, solve a set of problems, watch a video etc.")
-    })).describe("A day-wise preparation plan for the candidate to follow in order to prepare for the interview effectively"),
-    title: z.string().describe("The title of the job for which the interview report is generated"),
-})
-
-async function generateInterviewReport({ resume, selfDescription, jobDescription, daysUntilInterview }) {
-
-    const timingInstruction = daysUntilInterview
-        ? `The candidate has exactly ${daysUntilInterview} day(s) until their actual interview. The preparationPlan array MUST contain exactly ${daysUntilInterview} entries (one per day, day 1 through day ${daysUntilInterview}), with the workload and topic depth per day scaled realistically to fit that timeframe. If the timeframe is very short (1-2 days), prioritize only the highest-impact topics and skip lower-priority skill gaps rather than cramming everything in.`
-        : `The candidate has not specified a deadline. Generate a sensible default preparation plan (typically 5-7 days) covering all identified skill gaps at a reasonable pace.`;
-
-    const prompt = `Generate an interview report for a candidate with the following details:
-                        Resume: ${resume}
-                        Self Description: ${selfDescription}
-                        Job Description: ${jobDescription}
-
-                        ${timingInstruction}
-`
-
-    const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: prompt,
-        config: {
-            responseMimeType: "application/json",
-            responseSchema: zodToJsonSchema(interviewReportSchema),
-        }
-    })
-
-    return JSON.parse(response.text)
-
-
+/**
+ * Custom error class representing normalized AI service errors.
+ */
+class AIError extends Error {
+    constructor(message, { code = "AI_GENERIC_ERROR", statusCode = 500, isTransient = false, details = null } = {}) {
+        super(message)
+        this.name = "AIError"
+        this.code = code
+        this.statusCode = statusCode
+        this.isTransient = isTransient
+        this.details = details
+    }
 }
 
+/**
+ * Normalizes vendor/network errors into safe, domain-level AIError instances.
+ * Guarantees that internal keys, paths, and raw SDK stack traces are not leaked.
+ */
+function normalizeAIError(error) {
+    if (error instanceof AIError) {
+        return error
+    }
 
+    const message = (error && error.message) || ""
+    const lower = message.toLowerCase()
+    const code = error && error.code
+    const status = error && (error.status || error.statusCode || (error.response && error.response.status))
 
-async function generateResumePdf({ resume, selfDescription, jobDescription }) {
+    // 1. Configuration errors
+    if (code === "CONFIGURATION_ERROR" || lower.includes("api_key") || lower.includes("api key") || lower.includes("xai_api_key")) {
+        return new AIError("AI service configuration error. Please contact the administrator.", {
+            code: "CONFIGURATION_ERROR",
+            statusCode: 500,
+            isTransient: false
+        })
+    }
 
-    const resumePdfSchema = z.object({
-        html: z.string().describe("The HTML content of the resume which can be converted to PDF using any library like puppeteer")
+    // 2. Rate limit / Quota exhaustion
+    if (status === 429 || lower.includes("quota") || lower.includes("rate limit") || lower.includes("resource_exhausted")) {
+        return new AIError("AI provider rate limit reached. Please wait a moment before trying again.", {
+            code: "RATE_LIMIT_EXCEEDED",
+            statusCode: 429,
+            isTransient: true
+        })
+    }
+
+    // 3. Timeout errors
+    if (code === "REQUEST_TIMEOUT" || lower.includes("timeout") || lower.includes("timed out") || status === 504) {
+        return new AIError("AI request timed out. Please try again with shorter input.", {
+            code: "REQUEST_TIMEOUT",
+            statusCode: 504,
+            isTransient: true
+        })
+    }
+
+    // 4. Provider server / service unavailable
+    if (status === 503 || status === 502 || status === 500 || lower.includes("overloaded") || lower.includes("service unavailable")) {
+        return new AIError("AI service is temporarily unavailable. Please try again shortly.", {
+            code: "PROVIDER_UNAVAILABLE",
+            statusCode: 503,
+            isTransient: true
+        })
+    }
+
+    // 5. Schema / response validation errors
+    if (code === "VALIDATION_ERROR" || code === "INVALID_RESPONSE" || lower.includes("schema") || lower.includes("json")) {
+        return new AIError("AI response did not meet required format standards. Please refine your inputs and try again.", {
+            code: "VALIDATION_ERROR",
+            statusCode: 422,
+            isTransient: false,
+            details: error.details || null
+        })
+    }
+
+    // 6. Network connectivity errors
+    if (lower.includes("econnreset") || lower.includes("etimedout") || lower.includes("fetch failed")) {
+        return new AIError("Network connection to AI provider failed. Please check internet access and try again.", {
+            code: "NETWORK_ERROR",
+            statusCode: 503,
+            isTransient: true
+        })
+    }
+
+    // 7. Generic fallback
+    return new AIError("Failed to generate AI response. Please try again.", {
+        code: "AI_GENERIC_ERROR",
+        statusCode: 500,
+        isTransient: false
     })
-
-    const prompt = `Generate resume for a candidate with the following details:
-                        Resume: ${resume}
-                        Self Description: ${selfDescription}
-                        Job Description: ${jobDescription}
-
-                        the response should be a JSON object with a single field "html" which contains the HTML content of the resume which can be converted to PDF using any library like puppeteer.
-                        The resume should be tailored for the given job description and should highlight the candidate's strengths and relevant experience. The HTML content should be well-formatted and structured, making it easy to read and visually appealing.
-                        The content of resume should be not sound like it's generated by AI and should be as close as possible to a real human-written resume.
-                        you can highlight the content using some colors or different font styles but the overall design should be simple and professional.
-                        The content should be ATS friendly, i.e. it should be easily parsable by ATS systems without losing important information.
-                        The resume should not be so lengthy, it should ideally be 1-2 pages long when converted to PDF. Focus on quality rather than quantity and make sure to include all the relevant information that can increase the candidate's chances of getting an interview call for the given job description.
-                    `
-
-    const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: prompt,
-        config: {
-            responseMimeType: "application/json",
-            responseSchema: zodToJsonSchema(resumePdfSchema),
-        }
-    })
-
-
-    const jsonContent = JSON.parse(response.text)
-
-    return jsonContent.html
-
 }
 
-module.exports = { generateInterviewReport, generateResumePdf }
+/**
+ * Application boundary for interview report generation via AI Gateway.
+ */
+async function generateInterviewReport({ resume, selfDescription, jobDescription, daysUntilInterview }, options = {}) {
+    try {
+        return await aiGateway.execute(
+            "generateInterviewReport",
+            (provider) => provider.generateInterviewReport({
+                resume,
+                selfDescription,
+                jobDescription,
+                daysUntilInterview
+            }, options),
+            options
+        )
+    } catch (error) {
+        console.error("AI Service - generateInterviewReport failed:", error.message)
+        throw normalizeAIError(error)
+    }
+}
+
+/**
+ * Application boundary for resume HTML generation via AI Gateway.
+ */
+async function generateResumePdf({ resume, selfDescription, jobDescription }, options = {}) {
+    try {
+        return await aiGateway.execute(
+            "generateResumePdf",
+            (provider) => provider.generateResumePdf({
+                resume,
+                selfDescription,
+                jobDescription
+            }, options),
+            options
+        )
+    } catch (error) {
+        console.error("AI Service - generateResumePdf failed:", error.message)
+        throw normalizeAIError(error)
+    }
+}
+
+module.exports = {
+    generateInterviewReport,
+    generateResumePdf,
+    normalizeAIError,
+    AIError,
+    aiGateway,
+    aiRouter
+}

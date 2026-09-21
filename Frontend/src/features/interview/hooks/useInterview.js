@@ -1,13 +1,10 @@
 import { getAllInterviewReports, generateInterviewReport, getInterviewReportById, generateResumePdf, deleteInterviewReport, toggleStarInterviewReport } from "../services/interview.api"
-import { useContext, useEffect } from "react"
+import { useContext } from "react"
 import { InterviewContext } from "../interview.context"
-import { useParams } from "react-router"
-
 
 export const useInterview = () => {
 
     const context = useContext(InterviewContext)
-    const { interviewId } = useParams()
 
     if (!context) {
         throw new Error("useInterview must be used within an InterviewProvider")
@@ -23,7 +20,9 @@ export const useInterview = () => {
         report, 
         setReport, 
         reports, 
-        setReports 
+        setReports,
+        pagination,
+        setPagination
     } = context
 
     const generateReport = async ({ jobDescription, selfDescription, resumeFile, daysUntilInterview }) => {
@@ -78,7 +77,7 @@ export const useInterview = () => {
         return response?.interviewReport
     }
 
-    const getReports = async () => {
+    const getReports = async (page = 1, limit = 20) => {
         setError(null)
         setLoading(true)
         setLoadingMessage({
@@ -87,8 +86,12 @@ export const useInterview = () => {
         })
         let response = null
         try {
-            response = await getAllInterviewReports()
-            setReports(response.interviewReports || [])
+            response = await getAllInterviewReports(page, limit)
+            const fetchedReports = response.interviewReports || response.reports || []
+            setReports(fetchedReports)
+            if (response.pagination) {
+                setPagination(response.pagination)
+            }
         } catch (err) {
             console.error(err)
             const errMsg = err.response?.data?.message || err.message || "Failed to fetch interview plans."
@@ -97,7 +100,13 @@ export const useInterview = () => {
             setLoading(false)
         }
 
-        return response?.interviewReports
+        return response?.interviewReports || response?.reports
+    }
+
+    const changePage = (newPage) => {
+        if (newPage >= 1 && (!pagination || newPage <= pagination.totalPages)) {
+            getReports(newPage, pagination?.limit || 20)
+        }
     }
 
     const getResumePdf = async (interviewReportId) => {
@@ -178,14 +187,6 @@ export const useInterview = () => {
         }
     }
 
-    useEffect(() => {
-        if (interviewId) {
-            getReportById(interviewId)
-        } else {
-            getReports()
-        }
-    }, [ interviewId ])
-
     return { 
         loading, 
         loadingMessage, 
@@ -193,6 +194,8 @@ export const useInterview = () => {
         setError, 
         report, 
         reports, 
+        pagination,
+        changePage,
         generateReport, 
         getReportById, 
         getReports, 
