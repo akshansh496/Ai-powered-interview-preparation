@@ -1,113 +1,135 @@
- # Walkthrough — InterviewAI Scaling Implementation (Phases 1–4)
+# Walkthrough — InterviewAI UI Redesign & Architecture
 
-All four phases specified in [INTERVIEWAI_AI_ROUTER_ANTIGRAVITY_SPEC.md](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/INTERVIEWAI_AI_ROUTER_ANTIGRAVITY_SPEC.md) have been implemented and verified on the dedicated **`feature/ai-router`** branch.
+All frontend styling and layout across InterviewAI have been redesigned to adopt a modern, clean SaaS design system centered around `#0057FF` (Primary Blue) and `#F8F7F4` (Canvas Background) on the dedicated **`feature/multi-ai-router`** branch.
 
 ---
 
 ## 1. Branching Rule Adherence
 
-- Working branch created and maintained: **`feature/ai-router`**.
-- Branch status: **Isolated from `main`**. No changes or merges to `main` have occurred.
+- Working branch: **`feature/multi-ai-router`**.
+- Branch status: **Isolated from `main`**. No changes, merges, or commits to `main` have occurred.
 
 ---
 
-## 2. Changes Implemented
+## 2. Design System Tokens & Semantic Palette
 
-### Phase 1 & 3: AI Service Abstraction & Error Handling
-- **[gemini.provider.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai/gemini.provider.js)**:
-  - Encapsulated `@google/genai` client, model config (`gemini-3-flash-preview`), and structured output Zod schemas.
-  - Implemented bounded exponential backoff retries for transient errors (429, 503, network timeouts) using configurable `AI_MAX_RETRIES` (default: 2) and `AI_REQUEST_TIMEOUT_MS` (default: 60000ms).
-- **[ai.service.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai.service.js)**:
-  - Established application boundary for AI operations (`generateInterviewReport`, `generateResumePdf`).
-  - Introduced `AIError` class and `normalizeAIError()` to map vendor errors to domain statuses (`RATE_LIMIT_EXCEEDED`, `PROVIDER_UNAVAILABLE`, `REQUEST_TIMEOUT`, `VALIDATION_ERROR`, `CONFIGURATION_ERROR`) without leaking API keys or internal stack traces.
-
-### Phase 2: Request Protection & Rate Limiting
-- **[rateLimiter.middleware.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/middlewares/rateLimiter.middleware.js)**:
-  - In-memory sliding window rate limiter keyed by user ID or client IP.
-  - Configured with `AI_REQUEST_LIMIT_PER_WINDOW` (default: 10) and `AI_RATE_LIMIT_WINDOW_MS` (default: 900,000ms / 15 mins).
-  - Emits HTTP 429 with `Retry-After` header and sanitized message when limit is reached.
-- **[interview.routes.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/routes/interview.routes.js)**:
-  - Mounted rate limiting on expensive endpoints: `POST /api/interview/` and `POST /api/interview/resume/pdf/:interviewReportId`.
-- **[app.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/app.js)**:
-  - Added explicit 2MB body payload size limits on `express.json` and `express.urlencoded`.
-
-### Phase 4: Database Optimization & Pagination
-- **[interviewReport.model.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/models/interviewReport.model.js)**:
-  - Added compound index matching dashboard sorting and user filtering:
-    ```javascript
-    interviewReportSchema.index({ user: 1, isStarred: -1, createdAt: -1 });
-    ```
-- **[interview.controller.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/controllers/interview.controller.js)**:
-  - `getAllInterviewReportsController` now accepts `page` and `limit` query parameters.
-  - Runs paginated retrieval via `skip()` and `limit()`, returning both `interviewReports` and `reports` array alongside `pagination: { page, limit, total, totalPages }`.
-  - Mapped `AIError` to clean HTTP status codes (429, 503, 504, 422, 500) in both generation and resume PDF endpoints.
-- **Frontend Pagination & State**:
-  - **[interview.api.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Frontend/src/features/interview/services/interview.api.js)**: Updated `getAllInterviewReports(page, limit)`.
-  - **[interview.context.jsx](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Frontend/src/features/interview/interview.context.jsx)**: Added `pagination` state.
-  - **[useInterview.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Frontend/src/features/interview/hooks/useInterview.js)**: Added `pagination` tracking and `changePage(newPage)`.
-  - **[Home.jsx](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Frontend/src/features/interview/pages/Home.jsx)** & **[Home.scss](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Frontend/src/features/interview/style/Home.scss)**: Rendered pagination buttons (`Previous`, `Next`, `Page X of Y`) and empty dashboard state.
-
-### Phase 5: Multi-AI Provider Architecture & Router
-- **[provider.interface.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai/provider.interface.js)**:
-  - Abstract base contract for AI providers enforcing `generateInterviewReport`, `generateResumePdf`, `isAvailable`, and `model`.
-- **[provider.registry.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai/provider.registry.js)**:
-  - Central registry containing `gemini` and `grok` with dynamic registration capabilities.
-- **[gemini.provider.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai/gemini.provider.js)**:
-  - Refactored to implement `AIProvider` while preserving bounded retry, timeout handling, and Zod structured output.
-- **[grok.provider.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai/grok.provider.js)**:
-  - xAI Grok provider using standard OpenAI-compatible REST endpoint (`https://api.x.ai/v1/chat/completions`) and native `fetch`.
-  - Configurable model via `GROK_MODEL` (default: `grok-2-latest`) and backend-only `XAI_API_KEY`.
-  - Parsed & validated against shared `interviewReportSchema` and `resumePdfSchema`.
-- **[ai.router.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai/ai.router.js)**:
-  - Centralized task routing based on `AI_DEFAULT_PROVIDER` with request-level override support.
-  - Automatic bounded fallback to `AI_FALLBACK_PROVIDER` (default: `grok`) on transient errors (429, 503, network timeout).
-  - Loop protection and strict prohibition of fallback on validation/configuration errors.
-  - Structured execution logging (task, provider, model, latency, success, errorCategory).
-
-### Phase 6: Documentation Synchronization
-- **[PROJECT_STRUCTURE.md](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/PROJECT_STRUCTURE.md)**:
-  - Updated directory tree with all new files and tests.
-  - Documented new components, middleware, and environment variables.
-  - Included step-by-step developer guide for adding future AI providers (OpenAI, Claude, DeepSeek).
+- **Primary Blue**: `#0057FF` — Used intentionally for primary CTA buttons, active navigation indicators, link hover states, focus rings, and accent tags.
+- **Background**: `#F8F7F4` — Clean off-white canvas for optimal contrast and readability.
+- **Surface**: `#FFFFFF` — Elevated cards and panels with subtle borders (`#E5E3DC`) and soft shadows (`rgba(15, 23, 42, 0.05)`).
+- **Text Hierarchy**:
+  - Primary text: `#0F172A` (Slate 900)
+  - Secondary text: `#334155` (Slate 700)
+  - Muted text: `#64748B` (Slate 500)
+  - Subtle borders & dividers: `#E5E3DC` / `#EFECE6`
 
 ---
 
-## 3. Verification Results
+## 3. Redesigned Components & Pages
 
-### Backend Automated Unit Tests
-Executed via native Node test runner (`node --test tests/*.test.js`):
+### 1. Global Styles & Buttons
+- **[style.scss](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Frontend/src/style.scss)**:
+  - Configured global CSS custom properties (`--primary: #0057FF`, `--background: #F8F7F4`, etc.).
+  - Redesigned global custom scrollbars with primary blue accents.
+  - Redesigned global `.loading-screen` and `.error-screen` with SaaS-style white container cards, primary blue progress bars, and subtle backdrop blurs.
+- **[button.scss](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Frontend/src/style/button.scss)**:
+  - `.primary-button`: Deep `#0057FF` background, `#FFFFFF` text, subtle shadow, and `#0047DB` hover state.
+  - `.secondary-button`: Clean `#FFFFFF` background, `#E5E3DC` border, `#0F172A` text, and subtle hover transition.
+
+### 2. Authentication Pages (Login & Register)
+- **[auth.form.scss](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Frontend/src/features/auth/auth.form.scss)**:
+  - Off-white canvas background (`#F8F7F4`) with a centered pure white card (`#FFFFFF`) with `#E5E3DC` border and soft elevation.
+  - Modern brand emblem featuring a `#0057FF` icon with soft blue badge background.
+  - Inputs styled with crisp `#E5E3DC` borders, `#0057FF` focus rings, and high contrast typography.
+  - Clean error banner (`#FEF2F2` background, `#DC2626` text, `#FECACA` border).
+- **[Login.jsx](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Frontend/src/features/auth/pages/Login.jsx)** & **[Register.jsx](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Frontend/src/features/auth/pages/Register.jsx)**:
+  - Clean layout preserving all form bindings, validation, error display, and navigation links.
+
+### 3. Dashboard / Home
+- **[Home.scss](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Frontend/src/features/interview/style/Home.scss)**:
+  - **Top Navigation**: Clean white bar with brand emblem, subtle user chip, and red-accented logout button.
+  - **Hero Header**: High-contrast typography with primary blue highlight.
+  - **Strategy Generator Card**: Two-panel card layout with vertical divider.
+    - Left panel: Job Description textarea with char counter and "Required" badge.
+    - Right panel: Modern drag-and-drop resume upload zone and self-description alternative textarea.
+    - Card footer: Clean `#FAF9F6` footer with primary `#0057FF` generate button.
+  - **Recent Reports List**: White report cards with match score badges, date metadata, star toggle button, and delete action.
+  - **Pagination Controls**: Clean white previous/next buttons and page count indicator.
+  - **Empty State Card**: Subtle dashed border card with friendly prompt when no reports exist.
+
+### 4. Interview Strategy & Details
+- **[Interview.scss](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Frontend/src/features/interview/style/Interview.scss)**:
+  - **3-Column Layout Card**: Pure white card with `#E5E3DC` vertical dividers.
+  - **Left Navigation**:
+    - "Back to Home" button with subtle slate hover.
+    - Nav tabs with `#EFF4FF` active background, `#BFDBFE` border, and `#0057FF` text/icons.
+    - "Download Resume" primary button and "Star Plan" toggle button.
+  - **Center Content**:
+    - Header with section title and count badge.
+    - Q&A expandable cards with "Intention" tag (`#FFFBEB`) and "Model Answer" tag (`#EFF4FF`).
+    - Preparation Roadmap day-by-day cards with `#0057FF` day badges and bulleted action items.
+  - **Right Sidebar**:
+    - Match score radial indicator ring with color-coded severity states (Green for high, Amber for mid, Red for low).
+    - Skill gap badges categorized by severity (`skill-tag--high`, `skill-tag--medium`, `skill-tag--low`).
+
+---
+
+## 4. Verification Results
+
+### Backend Automated Tests (77 passing)
+Executed via native Node test runner (`node --test src/tests/**/*.test.js`):
 ```text
 ✔ AIRouter - Provider Registration & Registry tests (3 tests)
-✔ AIRouter - Routing & Execution tests (2 tests)
+✔ AIRouter - Routing & Execution tests (1 test)
 ✔ AIRouter - Fallback Mechanism tests (4 tests)
 ✔ AI Service - normalizeAIError tests (7 tests)
 ✔ GrokProvider - Configuration and Availability tests (2 tests)
 ✔ GrokProvider - API Execution and Structured Output tests (3 tests)
-✔ AIProvider Interface tests (3 tests)
+✔ OpenRouterProvider - extractAndParseJson helper unit tests (5 tests)
+✔ OpenRouterProvider - Configuration and Availability tests (2 tests)
+✔ OpenRouterProvider - API Execution, Schema Validation, and Retry tests (8 tests)
+✔ AIProvider Interface tests (4 tests)
 ✔ ProviderRegistry tests (4 tests)
 ✔ Rate Limiter Middleware tests (3 tests)
+✔ RoutingEngine - Suitability Scoring & Health Tracking tests (5 tests)
+✔ RoutingEngine - Candidate Evaluation & Filtering tests (3 tests)
 
-ℹ tests 40
-ℹ pass 40
+ℹ tests 77
+ℹ pass 77
 ℹ fail 0
 ```
 
-### Frontend Playwright E2E Tests
-Executed via `npm test` (`playwright test`):
+### Frontend Playwright E2E Tests (10 passing)
+Executed via `npx playwright test`:
 ```text
 Running 10 tests using 1 worker
 
-  ✓ 1 should generate strategy successfully and navigate to plan details
-  ✓ 2 should display error screen if strategy generation fails
-  ✓ 3 should display rate-limit error screen when AI generation rate limit is exceeded
-  ✓ 4 should handle AI validation failure and display helpful error
-  ✓ 5 should support downloading resume on plan details page
-  ✓ 6 should display validation and credentials error on Login page
-  ✓ 7 should require a resume or self-description on generation attempt
-  ✓ 8 should support starring and deleting plans from the dashboard
-  ✓ 9 should support navigating between pages in the report list
-  ✓ 10 should display empty state when user has no interview reports
+  ✓  1 should generate strategy successfully and navigate to plan details (1.4s)
+  ✓  2 should display error screen if strategy generation fails (1.1s)
+  ✓  3 should display rate-limit error screen when AI generation rate limit is exceeded (1.1s)
+  ✓  4 should handle AI validation failure and display helpful error (1.1s)
+  ✓  5 should support downloading resume on plan details page (1.1s)
+  ✓  6 should display validation and credentials error on Login page (1.3s)
+  ✓  7 should require a resume or self-description on generation attempt (1.0s)
+  ✓  8 should support starring and deleting plans from the dashboard (1.4s)
+  ✓  9 should support navigating between pages in the report list (1.1s)
+  ✓ 10 should display empty state when user has no interview reports (937ms)
 
-10 passed (5.7s)
+10 passed (13.3s)
 ```
 
+### Production Build Verification
+Executed via `npm run build`:
+```text
+dist/index.html                         0.46 kB │ gzip:   0.29 kB
+dist/assets/auth-DctM4yJj.css           2.11 kB │ gzip:   0.72 kB
+dist/assets/index-VA_qLp0A.css          6.14 kB │ gzip:   1.78 kB
+dist/assets/Interview-BGYlx9c9.css      9.86 kB │ gzip:   2.02 kB
+dist/assets/Home-EfuRUGgc.css          10.21 kB │ gzip:   2.28 kB
+dist/assets/Login-D8QvhB92.js           2.58 kB │ gzip:   1.02 kB
+dist/assets/Register-ijpCgkgm.js        2.95 kB │ gzip:   1.08 kB
+dist/assets/useInterview-BMFOEO95.js    4.08 kB │ gzip:   1.54 kB
+dist/assets/Interview-CFfK93Af.js       9.63 kB │ gzip:   2.71 kB
+dist/assets/Home-DtPCV923.js           12.31 kB │ gzip:   3.45 kB
+dist/assets/index-DV16yCU9.js         334.85 kB │ gzip: 109.01 kB
+✓ built in 223ms
+```

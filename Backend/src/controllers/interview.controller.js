@@ -75,7 +75,7 @@ async function generateInterViewReportController(req,res){
 async function getInterviewReportByIdController(req,res){
     const {interviewId}=req.params
 
-    const interviewReport=await interviewReportModel.findOne({_id:interviewId,user:req.user.id})
+    const interviewReport=await interviewReportModel.findOne({_id:interviewId,user:req.user.id}).lean()
 
     if(!interviewReport){
         return res.status(401).json({
@@ -103,7 +103,8 @@ async function getAllInterviewReportsController(req,res){
                 .sort({ isStarred: -1, createdAt: -1 })
                 .skip(skip)
                 .limit(limit)
-                .select("-resume -selfDescription -jobDescription -__v -technicalQuestions -behavioralQuestions -skillGaps -preparationPlan"),
+                .select("jobDescription matchScore isStarred createdAt")
+                .lean(),
             interviewReportModel.countDocuments({ user: req.user.id })
         ])
 

@@ -1,25 +1,57 @@
-@use  "./style/button.scss";
+@use "./style/button.scss";
+
+:root {
+    --primary: #0057FF;
+    --primary-hover: #0047DB;
+    --primary-active: #0039B3;
+    --primary-light: #EFF4FF;
+    --primary-border: #BFDBFE;
+    --background: #F8F7F4;
+    --surface: #FFFFFF;
+    --surface-subtle: #F3F2EE;
+    --surface-hover: #ECEAE4;
+    --border: #E5E3DC;
+    --border-subtle: #EFECE6;
+    --text-primary: #0F172A;
+    --text-secondary: #334155;
+    --text-muted: #64748B;
+    --text-light: #94A3B8;
+    --danger: #DC2626;
+    --danger-light: #FEF2F2;
+    --danger-border: #FECACA;
+    --success: #059669;
+    --success-light: #ECFDF5;
+    --success-border: #A7F3D0;
+    --warning: #D97706;
+    --warning-light: #FFFBEB;
+    --warning-border: #FDE68A;
+    --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+    --shadow-md: 0 4px 16px -2px rgba(15, 23, 42, 0.06), 0 2px 6px -1px rgba(15, 23, 42, 0.04);
+    --shadow-lg: 0 12px 32px -4px rgba(15, 23, 42, 0.08), 0 4px 12px -2px rgba(15, 23, 42, 0.04);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+}
 
 * {
-    margin: 0%;
-    padding: 0%;
+    margin: 0;
+    padding: 0;
     box-sizing: border-box;
 }
 
 html, body, #root {
     width: 100%;
     min-height: 100vh;
-    background: radial-gradient(circle at 50% 0%, #15182D 0%, #080B13 100%);
-    background-color: #080B13;
-    color: #F8FAFC;
+    background-color: var(--background);
+    color: var(--text-primary);
     font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     overflow-x: hidden;
 }
 
 .highlight {
-    background: linear-gradient(135deg, #06B6D4 0%, #8B5CF6 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    color: var(--primary);
     font-weight: 700;
 }
 
@@ -29,45 +61,52 @@ html, body, #root {
     height: 6px;
 }
 *::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--background);
 }
 *::-webkit-scrollbar-thumb {
-    background: rgba(6, 182, 212, 0.45);
+    background: rgba(0, 87, 255, 0.25);
     border-radius: 9999px;
 }
 *::-webkit-scrollbar-thumb:hover {
-    background: rgba(6, 182, 212, 0.7);
+    background: var(--primary);
 }
 
-// ── Futuristic Loading Screen ──
+// ── Modern Loading Screen ──
 .loading-screen {
     width: 100%;
     min-height: 100vh;
     display: flex;
     justify-content: center;
     align-items: center;
-    background: radial-gradient(circle at 50% 50%, #0C101F 0%, #03060F 100%);
+    background-color: rgba(248, 247, 244, 0.85);
     padding: 2rem;
     box-sizing: border-box;
     position: fixed;
     top: 0;
     left: 0;
     z-index: 9999;
+    backdrop-filter: blur(8px);
 }
 
 .loading-container {
     text-align: center;
-    max-width: 480px;
+    max-width: 440px;
+    width: 100%;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 1.5rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 3rem 2rem;
+    box-shadow: var(--shadow-lg);
 }
 
 .loader-orb {
     position: relative;
-    width: 90px;
-    height: 90px;
+    width: 64px;
+    height: 64px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -76,7 +115,7 @@ html, body, #root {
         position: absolute;
         width: 100%;
         height: 100%;
-        background: radial-gradient(circle, rgba(6, 182, 212, 0.3) 0%, transparent 70%);
+        background: radial-gradient(circle, rgba(0, 87, 255, 0.15) 0%, transparent 70%);
         animation: orbPulse 2s ease-in-out infinite;
     }
 
@@ -84,70 +123,67 @@ html, body, #root {
         position: absolute;
         width: 100%;
         height: 100%;
-        border: 2px solid transparent;
-        border-top-color: #06B6D4;
-        border-bottom-color: #8B5CF6;
+        border: 3px solid var(--border-subtle);
+        border-top-color: var(--primary);
         border-radius: 50%;
-        animation: orbRotate 1.5s linear infinite;
+        animation: orbRotate 1s linear infinite;
     }
 
     .orb-inner {
         position: absolute;
-        width: 70%;
-        height: 70%;
+        width: 65%;
+        height: 65%;
         border: 2px solid transparent;
-        border-left-color: #3B82F6;
-        border-right-color: #A855F7;
+        border-left-color: var(--primary);
         border-radius: 50%;
-        animation: orbRotateCounter 2s linear infinite;
+        animation: orbRotateCounter 1.5s linear infinite;
     }
 
     .orb-core {
-        width: 25px;
-        height: 25px;
-        background: linear-gradient(135deg, #06B6D4 0%, #8B5CF6 100%);
+        width: 14px;
+        height: 14px;
+        background: var(--primary);
         border-radius: 50%;
-        box-shadow: 0 0 15px rgba(6, 182, 212, 0.8);
+        box-shadow: 0 0 10px rgba(0, 87, 255, 0.4);
     }
 }
 
 .loading-text {
     h2 {
-        font-size: 1.5rem;
+        font-size: 1.35rem;
         font-weight: 700;
         letter-spacing: -0.02em;
         margin-bottom: 0.5rem;
-        color: #F8FAFC;
+        color: var(--text-primary);
     }
 
     p {
-        font-size: 0.95rem;
-        color: #94A3B8;
-        line-height: 1.6;
+        font-size: 0.925rem;
+        color: var(--text-muted);
+        line-height: 1.5;
     }
 }
 
 .loading-progress-bar {
-    width: 240px;
+    width: 200px;
     height: 4px;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--surface-subtle);
     border-radius: 9999px;
     overflow: hidden;
-    margin-top: 0.5rem;
 
     .progress-fill {
         width: 100%;
         height: 100%;
-        background: linear-gradient(90deg, #06B6D4, #3B82F6, #8B5CF6, #06B6D4);
+        background: linear-gradient(90deg, var(--primary-light), var(--primary), var(--primary-light));
         background-size: 200% 100%;
         border-radius: 9999px;
-        animation: progressMove 1.5s linear infinite, progressScan 2.5s ease-in-out infinite;
+        animation: progressMove 1.5s linear infinite;
     }
 }
 
 @keyframes orbPulse {
-    0%, 100% { transform: scale(1); opacity: 0.5; }
-    50% { transform: scale(1.25); opacity: 0.9; }
+    0%, 100% { transform: scale(1); opacity: 0.6; }
+    50% { transform: scale(1.2); opacity: 1; }
 }
 
 @keyframes orbRotate {
@@ -165,19 +201,14 @@ html, body, #root {
     100% { background-position: 200% 0%; }
 }
 
-@keyframes progressScan {
-    0%, 100% { width: 30%; transform: translateX(-50%); }
-    50% { width: 60%; transform: translateX(250%); }
-}
-
-// ── Futuristic Error Screen ──
+// ── Clean Error Screen ──
 .error-screen {
     width: 100%;
     min-height: 100vh;
     display: flex;
     justify-content: center;
     align-items: center;
-    background: radial-gradient(circle at 50% 50%, #1A0D10 0%, #050204 100%);
+    background-color: var(--background);
     padding: 2rem;
     box-sizing: border-box;
     position: fixed;
@@ -189,48 +220,46 @@ html, body, #root {
 .error-container {
     text-align: center;
     max-width: 480px;
+    width: 100%;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 1.5rem;
-    background: rgba(26, 13, 16, 0.6);
-    border: 1px solid rgba(239, 68, 68, 0.25);
-    border-radius: 16px;
-    padding: 2.5rem 2rem;
-    backdrop-filter: blur(12px);
-    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+    gap: 1.25rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 2.75rem 2rem;
+    box-shadow: var(--shadow-lg);
 }
 
 .error-icon-container {
-    position: relative;
-    width: 80px;
-    height: 80px;
+    width: 60px;
+    height: 60px;
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    background: rgba(239, 68, 68, 0.1);
-    border: 2px solid rgba(239, 68, 68, 0.35);
-    margin-bottom: 0.5rem;
-    animation: errorPulse 2s ease-in-out infinite;
+    background: var(--danger-light);
+    border: 1px solid var(--danger-border);
+    margin-bottom: 0.25rem;
 
     .error-icon {
-        filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.6));
+        color: var(--danger);
     }
 }
 
 .error-text {
     h2 {
-        font-size: 1.5rem;
+        font-size: 1.4rem;
         font-weight: 700;
         letter-spacing: -0.02em;
         margin-bottom: 0.5rem;
-        color: #FCA5A5;
+        color: var(--text-primary);
     }
 
     p {
-        font-size: 0.95rem;
-        color: #CBD5E1;
+        font-size: 0.925rem;
+        color: var(--text-muted);
         line-height: 1.6;
         word-break: break-word;
     }
@@ -238,49 +267,46 @@ html, body, #root {
 
 .error-actions {
     display: flex;
-    gap: 1rem;
-    margin-top: 1rem;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
     width: 100%;
     justify-content: center;
 
     .button {
-        padding: 0.75rem 1.5rem;
+        padding: 0.7rem 1.4rem;
         font-size: 0.9rem;
         font-weight: 600;
-        border-radius: 8px;
+        border-radius: var(--radius-sm);
         cursor: pointer;
         transition: all 0.2s ease;
         display: inline-flex;
         align-items: center;
         justify-content: center;
+        text-decoration: none;
     }
 
     .primary-button {
-        background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
-        color: white;
+        background: var(--primary);
+        color: #FFFFFF;
         border: none;
-        box-shadow: 0 4px 14px rgba(239, 68, 68, 0.4);
+        box-shadow: 0 2px 8px rgba(0, 87, 255, 0.25);
 
         &:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(239, 68, 68, 0.6);
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 14px rgba(0, 87, 255, 0.35);
         }
     }
 
     .secondary-button {
-        background: rgba(255, 255, 255, 0.05);
-        color: #E2E8F0;
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: var(--surface);
+        color: var(--text-primary);
+        border: 1px solid var(--border);
 
         &:hover {
-            background: rgba(255, 255, 255, 0.1);
-            transform: translateY(-2px);
-            border-color: rgba(255, 255, 255, 0.2);
+            background: var(--surface-subtle);
+            border-color: var(--border);
+            transform: translateY(-1px);
         }
     }
-}
-
-@keyframes errorPulse {
-    0%, 100% { transform: scale(1); box-shadow: 0 0 15px rgba(239, 68, 68, 0.2); }
-    50% { transform: scale(1.05); box-shadow: 0 0 25px rgba(239, 68, 68, 0.4); }
 }

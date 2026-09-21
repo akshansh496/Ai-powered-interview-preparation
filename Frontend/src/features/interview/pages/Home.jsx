@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import "../style/Home.scss"
 import { useInterview } from '../hooks/useInterview.js'
 import { useNavigate } from 'react-router-dom'
@@ -6,7 +6,7 @@ import { useAuth } from "../../auth/hooks/useAuth"
 
 const Home = () => {
 
-    const { loading, loadingMessage, error, setError, generateReport, reports, pagination, changePage, deleteReport, toggleStar } = useInterview()
+    const { loading, loadingMessage, error, setError, generateReport, getReports, reports, pagination, changePage, deleteReport, toggleStar } = useInterview()
     const { user, handleLogout } = useAuth()
     const [ jobDescription, setJobDescription ] = useState("")
     const [ selfDescription, setSelfDescription ] = useState("")
@@ -15,6 +15,10 @@ const Home = () => {
     const resumeInputRef = useRef()
 
     const navigate = useNavigate()
+
+    useEffect(() => {
+        getReports()
+    }, [])
 
     const handleGenerateReport = async () => {
         if (!selectedFile && !selfDescription.trim()) {
