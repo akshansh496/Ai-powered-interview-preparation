@@ -1,14 +1,20 @@
+const crypto = require("crypto")
 const providerRegistry = require("./provider.registry")
+const modelRegistry = require("./model.registry")
+const modelHealth = require("./model.health")
 const routingEngine = require("./routing.engine")
 const { isTransientError } = require("./gemini.provider")
 
 /**
- * AIGateway — Intelligent gateway for dynamic provider evaluation, execution, and resilient fallback.
- * Eliminates hardcoded default providers by evaluating runtime health, reliability, latency, and availability.
+ * AIGateway — Health-Aware Multi-Model AI Routing Gateway with Strict Timeouts & Fallback.
+ * Maintains individual model priorities, circuit-breaker health tracking, request abortion,
+ * and loop-protected sequential fallback terminating at openrouter/free before controlled error.
  */
 class AIGateway {
     constructor(options = {}) {
         this.registry = options.registry || providerRegistry
+        this.modelRegistry = options.modelRegistry || modelRegistry
+        this.modelHealth = options.modelHealth || modelHealth
         this.routingEngine = options.routingEngine || routingEngine
     }
 
@@ -40,6 +46,27 @@ class AIGateway {
     }
 
     /**
+     * Registers a model configuration into the model registry.
+     */
+    registerModel(modelConfig) {
+        return this.modelRegistry.registerModel(modelConfig)
+    }
+
+    /**
+     * Retrieves a model configuration by ID.
+     */
+    getModel(id) {
+        return this.modelRegistry.getModel(id)
+    }
+
+    /**
+     * Returns health metrics for a model ID.
+     */
+    getModelHealth(id) {
+        return this.modelHealth.getHealth(id)
+    }
+
+    /**
      * Checks whether automatic fallback is enabled.
      * @returns {boolean}
      */
@@ -48,46 +75,56 @@ class AIGateway {
     }
 
     /**
-     * Determines whether an error qualifies for automatic provider fallback.
-     * Only transient provider infrastructure failures qualify.
+     * Determines whether an error qualifies for automatic model fallback.
+     * Only transient provider infrastructure failures, model unavailabilities, & timeouts qualify.
      */
     isEligibleForFallback(error) {
         if (!error) return false
         if (!this.isFallbackEnabled()) return false
 
-        // Never fallback on application-level validation or configuration errors
-        if (error.code === "CONFIGURATION_ERROR" || error.code === "VALIDATION_ERROR" || error.code === "INVALID_INPUT") {
+        // Never fallback on application-level validation or bad input
+        if (error.code === "VALIDATION_ERROR" || error.code === "INVALID_INPUT") {
             return false
         }
+
+        const message = (error.message || "").toLowerCase()
+        const status = error.status || error.statusCode || (error.response && error.response.status)
+
+        // 404 on model API endpoint indicates model ID deprecation or unavailability on provider
+        if (status === 404 || message.includes("404") || message.includes("not_found") || message.includes("no longer available")) {
+            return true
+        }
+
         return isTransientError(error)
     }
 
     /**
-     * Prints formatted console banner when the AI Gateway selects a provider.
+     * Prints formatted console banner when the AI Gateway selects a model.
      */
-    logGatewaySelection({ task, providerName, model, score, candidateNames, reason }) {
+    logGatewaySelection({ requestId, task, providerName, model, priority, isFallback }) {
         console.log("=================================")
-        console.log("AI GATEWAY")
+        console.log("AI GATEWAY - MODEL ROUTER")
         console.log("=================================")
+        console.log(`Request ID: ${requestId}`)
         console.log(`Task: ${task}`)
-        console.log(`Selected Provider: ${providerName}`)
+        console.log(`Provider: ${providerName}`)
         console.log(`Model: ${model}`)
-        console.log(`Score: ${score}`)
-        console.log(`Candidate Providers: ${candidateNames.join(", ")}`)
-        console.log(`Selection Reason: ${reason}`)
+        console.log(`Priority: ${priority}`)
+        console.log(`Fallback Attempt: ${isFallback}`)
         console.log("=================================")
     }
 
     /**
-     * Prints formatted console banner when provider fallback is initiated.
+     * Prints formatted console banner when model fallback is initiated.
      */
-    logFallback({ failedProvider, errorCode, nextProvider, reason }) {
+    logFallback({ requestId, failedModel, failedProvider, errorCode, nextModel, nextProvider, reason }) {
         console.log("=================================")
-        console.log("AI PROVIDER FALLBACK")
+        console.log("AI MODEL FALLBACK INITIATED")
         console.log("=================================")
-        console.log(`Failed Provider: ${failedProvider}`)
+        console.log(`Request ID: ${requestId}`)
+        console.log(`Failed Model: ${failedModel} (${failedProvider})`)
         console.log(`Error: ${errorCode}`)
-        console.log(`Next Provider: ${nextProvider}`)
+        console.log(`Next Target: ${nextModel || "None"} (${nextProvider || "None"})`)
         console.log(`Reason: ${reason}`)
         console.log("=================================")
     }
@@ -108,142 +145,177 @@ class AIGateway {
     }
 
     /**
-     * Emits structured JSON log for gateway execution observability.
+     * Dynamically selects the next eligible model at request time using RoutingEngine scoring.
+     *
+     * Primary models are ranked by composite score (success rate, latency, health, availability).
+     * The final fallback model is only returned after all primary candidates are exhausted.
+     *
+     * @param {Set<string>} attemptedModels - Model IDs already attempted in this request cycle
+     * @param {string} [requestId] - Optional request ID for trace logging
+     * @returns {Object|null} Best eligible model config, or null if all options are exhausted
+     * @private
      */
-    logExecution({ task, provider, model, actualModel, score, candidates, reason, success, latencyMs, errorCategory = null, isFallback = false }) {
-        const logEntry = {
-            timestamp: new Date().toISOString(),
-            task,
-            provider,
-            model,
-            ...(actualModel ? { actualModel } : {}),
-            score,
-            candidates,
-            reason,
-            success,
-            latencyMs,
-            ...(isFallback ? { fallback: true } : {}),
-            ...(errorCategory ? { errorCategory } : {})
+    _selectNextModel(attemptedModels, requestId) {
+        const primaryModels = this.modelRegistry.getPrimaryModels()
+
+        // Use RoutingEngine to score and select the best eligible primary model dynamically
+        const { model: selected, scored } = this.routingEngine.selectBestModel(
+            primaryModels,
+            attemptedModels,
+            this.modelHealth
+        )
+
+        if (selected) {
+            // Emit a routing score trace for observability
+            if (scored.length > 0) {
+                const scoreLines = scored
+                    .map(s => `${s.modelId}:${s.score.toFixed(3)}(cs=${s.components.coldStart})`)
+                    .join(" ")
+                console.log(`[AI Router] requestId=${requestId || "?"} routingScore=[${scoreLines}] selected=${selected.id}`)
+            }
+            return selected
         }
-        console.log(`[AIGateway] ${JSON.stringify(logEntry)}`)
+
+        // All primary models exhausted or unhealthy — try the final availability fallback
+        const finalFallback = this.modelRegistry.getFinalFallbackModel()
+        if (finalFallback && finalFallback.enabled && !attemptedModels.has(finalFallback.id)) {
+            console.log(`[AI Router] requestId=${requestId || "?"} allPrimaryExhausted=true switching to finalFallback=${finalFallback.id}`)
+            return finalFallback
+        }
+
+        return null
     }
 
     /**
-     * Main gateway execution loop: dynamically evaluates available providers,
-     * executes the workload with the highest scoring provider, and performs dynamic
-     * fallback to the next best candidate on transient infrastructure errors.
+     * Main model-aware execution loop:
+     * 1. Iterates through healthy registered models by priority.
+     * 2. Applies hard timeout budget and request cancellation.
+     * 3. Falls back to next healthy model on timeout or transient failure.
+     * 4. Uses openrouter/free strictly as the final availability fallback.
+     * 5. Returns controlled AIError if all models fail.
      *
      * @param {string} taskName - Name of the task (e.g. 'generateInterviewReport', 'generateResumePdf')
-     * @param {Function} executeFn - Async function taking (provider) and returning validated result
+     * @param {Function} executeFn - Async function taking (provider, modelOptions)
      * @param {Object} [options] - Optional execution options
      */
     async execute(taskName, executeFn, options = {}) {
-        const excludedProviders = []
+        const requestId = options.requestId || `ai_${crypto.randomBytes(4).toString("hex")}`
+        const attemptedModels = new Set()
+        const totalStartTime = Date.now()
         let lastError = null
 
         while (true) {
-            const allProviders = this.registry.getAllProviders()
-            const evaluation = this.routingEngine.evaluate(allProviders, {
-                excludedProviders,
-                task: taskName,
-                options
-            })
+            const selectedModelConfig = this._selectNextModel(attemptedModels, requestId)
 
-            if (!evaluation.selected) {
+            if (!selectedModelConfig) {
+                const totalLatencyMs = Date.now() - totalStartTime
+                console.log(`[AI Router] requestId=${requestId} allModelsExhausted=true totalLatency=${totalLatencyMs}ms`)
+
                 const noProviderErr = new Error(
                     lastError
-                        ? `All eligible AI providers failed. Last error: ${lastError.message}`
-                        : "No available or healthy AI provider found to service the request."
+                        ? `All eligible AI models failed. Last error: ${lastError.message}`
+                        : "No available or healthy AI model found to service the request."
                 )
                 noProviderErr.code = "PROVIDER_UNAVAILABLE"
                 noProviderErr.statusCode = 503
                 throw noProviderErr
             }
 
-            const { provider: selectedProvider, score, reason } = evaluation.selected
-            const candidateNames = evaluation.candidates.map(c => c.provider.name)
-            const selectedModel = options.model || selectedProvider.model
+            // Loop protection: Mark model attempted immediately
+            attemptedModels.add(selectedModelConfig.id)
+            const isFallbackAttempt = attemptedModels.size > 1
 
-            // Log AI Gateway selection banner
+            // Resolve underlying provider
+            let provider = null
+            try {
+                provider = this.registry.getProvider(selectedModelConfig.provider)
+            } catch (err) {
+                // Provider missing or unconfigured
+                this.modelHealth.recordFailure(selectedModelConfig.id, err, 0)
+                lastError = err
+                if (!this.isFallbackEnabled()) throw err
+                continue
+            }
+
+            if (!provider || !provider.isAvailable()) {
+                const unavailErr = new Error(`Provider '${selectedModelConfig.provider}' is not available or missing API credentials.`)
+                unavailErr.code = "PROVIDER_UNAVAILABLE"
+                this.modelHealth.recordFailure(selectedModelConfig.id, unavailErr, 0)
+                lastError = unavailErr
+                if (!this.isFallbackEnabled()) throw unavailErr
+                continue
+            }
+
+            // Model execution options
+            const modelCallOpts = {
+                ...options,
+                model: selectedModelConfig.model,
+                timeoutMs: selectedModelConfig.timeoutMs,
+                maxRetries: 0 // Router handles multi-model fallback, no internal retry loop per model
+            }
+
             this.logGatewaySelection({
+                requestId,
                 task: taskName,
-                providerName: selectedProvider.name,
-                model: selectedModel,
-                score,
-                candidateNames,
-                reason
+                providerName: selectedModelConfig.provider,
+                model: selectedModelConfig.model,
+                priority: selectedModelConfig.priority,
+                isFallback: isFallbackAttempt
             })
 
-            const callStartTime = Date.now()
+            console.log(`[AI Router] requestId=${requestId} provider=${selectedModelConfig.provider} model=${selectedModelConfig.model} priority=${selectedModelConfig.priority} fallback=${isFallbackAttempt}`)
+
+            const modelStartTime = Date.now()
 
             try {
-                const result = await executeFn(selectedProvider)
-                const latencyMs = Date.now() - callStartTime
+                // Support both (provider, options) and (provider) signatures
+                const result = await executeFn(provider, modelCallOpts)
+                const latencyMs = Date.now() - modelStartTime
+                const totalLatencyMs = Date.now() - totalStartTime
 
-                // Record successful outcome in routing engine
-                this.routingEngine.recordSuccess(selectedProvider.name, latencyMs)
+                // Record success & clear health cooldown
+                this.modelHealth.recordSuccess(selectedModelConfig.id, latencyMs)
 
-                // Log success banner & structured telemetry
-                this.logSuccess(selectedProvider, taskName, options)
-                this.logExecution({
-                    task: taskName,
-                    provider: selectedProvider.name,
-                    model: selectedModel,
-                    score,
-                    candidates: candidateNames,
-                    reason,
-                    ...(selectedProvider.lastActualModel ? { actualModel: selectedProvider.lastActualModel } : {}),
-                    success: true,
-                    latencyMs,
-                    isFallback: excludedProviders.length > 0
-                })
+                // Trace telemetry
+                console.log(`[AI Router] requestId=${requestId} provider=${selectedModelConfig.provider} model=${selectedModelConfig.model} latency=${latencyMs}ms status=success finalProvider=${selectedModelConfig.provider} totalLatency=${totalLatencyMs}ms`)
 
+                this.logSuccess(provider, taskName, modelCallOpts)
                 return result
             } catch (error) {
-                const latencyMs = Date.now() - callStartTime
+                const latencyMs = Date.now() - modelStartTime
                 lastError = error
 
-                // Record failure in routing engine
-                this.routingEngine.recordFailure(selectedProvider.name, error, latencyMs)
+                const isTimeout = error.code === "REQUEST_TIMEOUT" || error.name === "AbortError" || (error.message || "").toLowerCase().includes("timeout")
 
-                this.logExecution({
-                    task: taskName,
-                    provider: selectedProvider.name,
-                    model: selectedModel,
-                    score,
-                    candidates: candidateNames,
-                    reason,
-                    success: false,
-                    latencyMs,
-                    errorCategory: error.code || error.name || "Error",
-                    isFallback: excludedProviders.length > 0
-                })
+                // Record failure & increment circuit-breaker counters
+                this.modelHealth.recordFailure(selectedModelConfig.id, error, latencyMs)
 
-                // Verify if error is eligible for fallback
+                console.log(`[AI Router] requestId=${requestId} provider=${selectedModelConfig.provider} model=${selectedModelConfig.model} latency=${latencyMs}ms status=${isTimeout ? "timeout" : "failure"} error=${error.code || error.message}`)
+                if (isTimeout) {
+                    console.log(`[AI Router] requestId=${requestId} timeout=true`)
+                }
+
+                // Verify fallback eligibility
                 const canFallback = this.isEligibleForFallback(error)
                 if (!canFallback) {
                     throw error
                 }
 
-                // Add failed provider to excluded list for loop protection
-                excludedProviders.push(selectedProvider.name)
-
-                // Peek next candidate for fallback logging
-                const nextEvaluation = this.routingEngine.evaluate(allProviders, {
-                    excludedProviders,
-                    task: taskName,
-                    options
+                // Fallback logging
+                const nextCandidate = this._selectNextModel(attemptedModels, requestId)
+                this.logFallback({
+                    requestId,
+                    failedModel: selectedModelConfig.model,
+                    failedProvider: selectedModelConfig.provider,
+                    errorCode: isTimeout ? "REQUEST_TIMEOUT" : (error.code || error.name || "TRANSIENT_ERROR"),
+                    nextModel: nextCandidate?.model,
+                    nextProvider: nextCandidate?.provider,
+                    reason: `${selectedModelConfig.id} failed (${error.message})`
                 })
 
-                if (nextEvaluation.selected) {
-                    this.logFallback({
-                        failedProvider: selectedProvider.name,
-                        errorCode: error.code || error.name || "TRANSIENT_ERROR",
-                        nextProvider: nextEvaluation.selected.provider.name,
-                        reason: `${selectedProvider.name} transient failure (${error.message})`
-                    })
+                if (nextCandidate) {
+                    console.log(`[AI Router] requestId=${requestId} fallback=${nextCandidate.model}`)
                 }
-                // Loop continues to attempt next suitable candidate
             }
         }
     }

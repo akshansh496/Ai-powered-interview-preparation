@@ -1,271 +1,196 @@
 /**
- * RoutingEngine — Runtime evaluation and dynamic suitability scoring for AI providers.
- * Evaluates provider availability, rate limits, health, reliability, and latency.
+ * RoutingEngine — Dynamic, request-time model scoring and selection.
+ *
+ * Scoring formula (all weights sum to 1.0):
+ *
+ *   score = (0.45 × successScore) + (0.30 × latencyScore) + (0.20 × healthScore) + (0.05 × availabilityScore)
+ *
+ * Component definitions
+ * ─────────────────────
+ * successScore   : recent success rate over rolling window (null → COLD_START_SUCCESS_RATE default)
+ * latencyScore   : normalized inverse latency; faster = higher score
+ *                  latency ≤ LATENCY_BEST_MS  → 1.0
+ *                  latency ≥ LATENCY_WORST_MS → 0.0
+ *                  null (cold start)          → COLD_START_LATENCY_SCORE default
+ * healthScore    : 1.0 if model isHealthy(), 0.0 if in active circuit-breaker cooldown
+ * availabilityScore : 1.0 (model is in registry and enabled, otherwise it wouldn't be a candidate)
+ *
+ * Cold-start policy
+ * ─────────────────
+ * When a model has fewer than MIN_OBSERVATIONS observations, cold-start defaults are used
+ * instead of measured values. This avoids penalizing fresh models for lack of history.
+ *
+ * Final fallback exclusion
+ * ────────────────────────
+ * Models flagged isFinalFallback:true are NEVER scored or ranked by this engine.
+ * They must be handled separately by AIGateway as the last-resort option.
  */
+
+// ────────────────────────────────────────────────
+// Tunable constants (all exported for testability)
+// ────────────────────────────────────────────────
+
+/** Weight for recent success rate contribution to overall score. */
+const WEIGHT_SUCCESS = 0.45
+/** Weight for latency contribution to overall score. */
+const WEIGHT_LATENCY = 0.30
+/** Weight for circuit-breaker health status contribution. */
+const WEIGHT_HEALTH = 0.20
+/** Weight for registry availability (always 1.0 for candidates). */
+const WEIGHT_AVAILABILITY = 0.05
+
+/** Latency at or below this value scores 1.0 (best). */
+const LATENCY_BEST_MS = 1000
+/** Latency at or above this value scores 0.0 (worst). */
+const LATENCY_WORST_MS = 7000
+
+/** Default success score applied to cold-start models with no observations. */
+const COLD_START_SUCCESS_RATE = 0.90
+/** Default latency score applied to cold-start models with no latency history. */
+const COLD_START_LATENCY_SCORE = 0.70
+/** Minimum observations before measured values replace cold-start defaults. */
+const MIN_OBSERVATIONS = 3
+
 class RoutingEngine {
-    constructor(options = {}) {
-        this.rateLimitCooldownMs = options.rateLimitCooldownMs || 60000 // 60s cooldown on 429
-        this.maxLatencySamples = options.maxLatencySamples || 20
-        this.providerState = new Map()
-    }
-
     /**
-     * Retrieves or initializes runtime state for a provider.
-     * @private
-     */
-    _getOrCreateState(providerName) {
-        const key = (providerName || "").toLowerCase()
-        if (!this.providerState.has(key)) {
-            this.providerState.set(key, {
-                successCount: 0,
-                failureCount: 0,
-                consecutiveFailures: 0,
-                recentLatencies: [],
-                lastSuccess: null,
-                lastFailure: null,
-                rateLimitedUntil: null,
-                lastError: null
-            })
-        }
-        return this.providerState.get(key)
-    }
-
-    /**
-     * Records a successful execution.
-     * @param {string} providerName
-     * @param {number} latencyMs
-     */
-    recordSuccess(providerName, latencyMs) {
-        const state = this._getOrCreateState(providerName)
-        state.successCount += 1
-        state.consecutiveFailures = 0
-        state.lastSuccess = Date.now()
-        state.rateLimitedUntil = null
-
-        if (typeof latencyMs === "number" && latencyMs >= 0) {
-            state.recentLatencies.push(latencyMs)
-            if (state.recentLatencies.length > this.maxLatencySamples) {
-                state.recentLatencies.shift()
-            }
-        }
-    }
-
-    /**
-     * Records a failed execution and marks rate limits if applicable.
-     * @param {string} providerName
-     * @param {Error} error
-     * @param {number} latencyMs
-     */
-    recordFailure(providerName, error, latencyMs) {
-        const state = this._getOrCreateState(providerName)
-        state.failureCount += 1
-        state.consecutiveFailures += 1
-        state.lastFailure = Date.now()
-        state.lastError = error ? (error.code || error.name || error.message) : "UNKNOWN_ERROR"
-
-        const status = error && (error.status || error.statusCode || (error.response && error.response.status))
-        const message = ((error && error.message) || "").toLowerCase()
-
-        if (status === 429 || message.includes("429") || message.includes("rate limit") || message.includes("quota")) {
-            state.rateLimitedUntil = Date.now() + this.rateLimitCooldownMs
-        }
-
-        if (typeof latencyMs === "number" && latencyMs >= 0) {
-            state.recentLatencies.push(latencyMs)
-            if (state.recentLatencies.length > this.maxLatencySamples) {
-                state.recentLatencies.shift()
-            }
-        }
-    }
-
-    /**
-     * Checks whether a provider is currently rate-limited.
-     * @param {string} providerName
-     * @returns {boolean}
-     */
-    isRateLimited(providerName) {
-        const state = this._getOrCreateState(providerName)
-        if (!state.rateLimitedUntil) return false
-        if (Date.now() < state.rateLimitedUntil) {
-            return true
-        }
-        // Cooldown has expired
-        state.rateLimitedUntil = null
-        return false
-    }
-
-    /**
-     * Returns a snapshot of a provider's runtime health metrics.
-     * @param {string} providerName
-     * @returns {Object}
-     */
-    getProviderState(providerName) {
-        const state = this._getOrCreateState(providerName)
-        const total = state.successCount + state.failureCount
-        const successRate = total === 0 ? 1.0 : state.successCount / total
-        const avgLatency = state.recentLatencies.length === 0
-            ? 800
-            : Math.round(state.recentLatencies.reduce((a, b) => a + b, 0) / state.recentLatencies.length)
-
-        return {
-            provider: (providerName || "").toLowerCase(),
-            rateLimited: this.isRateLimited(providerName),
-            successCount: state.successCount,
-            failureCount: state.failureCount,
-            consecutiveFailures: state.consecutiveFailures,
-            successRate,
-            averageLatencyMs: avgLatency,
-            lastSuccess: state.lastSuccess,
-            lastFailure: state.lastFailure,
-            rateLimitedUntil: state.rateLimitedUntil
-        }
-    }
-
-    /**
-     * Calculates a deterministic suitability score (0 - 100) for a provider.
-     *
-     * Scoring Weights:
-     * - Capability: 25 pts (structured JSON output conformance)
-     * - Availability: 20 pts (API key configured and valid)
-     * - Health & Reliability: 35 pts (rolling success rate + consecutive failure penalty)
-     * - Latency: 20 pts (rolling average response time)
-     *
-     * @param {import("./provider.interface").AIProvider} provider
-     * @param {string} task
      * @param {Object} [options]
-     * @returns {{ score: number, reason: string, state: Object, eligible: boolean }}
+     * @param {Object} [options.weights] - Override individual scoring weights (must sum to 1.0)
+     * @param {number} [options.latencyBestMs]  - Latency threshold for perfect latency score
+     * @param {number} [options.latencyWorstMs] - Latency threshold for zero latency score
+     * @param {number} [options.coldStartSuccessRate] - Default success rate for cold-start models
+     * @param {number} [options.coldStartLatencyScore] - Default latency score for cold-start models
+     * @param {number} [options.minObservations] - Observations required before using measured values
      */
-    calculateScore(provider, task = "generateInterviewReport", options = {}) {
-        const providerName = provider?.name || "unknown"
-        const isAvailable = typeof provider?.isAvailable === "function" ? provider.isAvailable() : false
-        const isRateLimited = this.isRateLimited(providerName)
-
-        if (!isAvailable) {
-            return {
-                score: -1,
-                reason: "unavailable (API key not configured)",
-                state: this.getProviderState(providerName),
-                eligible: false
-            }
+    constructor(options = {}) {
+        const w = options.weights || {}
+        this.weights = {
+            success: w.success !== undefined ? w.success : WEIGHT_SUCCESS,
+            latency: w.latency !== undefined ? w.latency : WEIGHT_LATENCY,
+            health: w.health !== undefined ? w.health : WEIGHT_HEALTH,
+            availability: w.availability !== undefined ? w.availability : WEIGHT_AVAILABILITY
         }
+        this.latencyBestMs = options.latencyBestMs !== undefined ? options.latencyBestMs : LATENCY_BEST_MS
+        this.latencyWorstMs = options.latencyWorstMs !== undefined ? options.latencyWorstMs : LATENCY_WORST_MS
+        this.coldStartSuccessRate = options.coldStartSuccessRate !== undefined ? options.coldStartSuccessRate : COLD_START_SUCCESS_RATE
+        this.coldStartLatencyScore = options.coldStartLatencyScore !== undefined ? options.coldStartLatencyScore : COLD_START_LATENCY_SCORE
+        this.minObservations = options.minObservations !== undefined ? options.minObservations : MIN_OBSERVATIONS
+    }
 
-        if (isRateLimited) {
-            return {
-                score: -1,
-                reason: "rate limited (in active cooldown)",
-                state: this.getProviderState(providerName),
-                eligible: false
-            }
+    /**
+     * Normalizes raw latency (ms) to a [0.0, 1.0] score where lower latency = higher score.
+     * Applies linear interpolation between latencyBestMs (1.0) and latencyWorstMs (0.0).
+     *
+     * @param {number|null} latencyMs - Average observed latency in milliseconds, or null
+     * @returns {number} Normalized score in range [0.0, 1.0]
+     */
+    normalizeLatency(latencyMs) {
+        if (latencyMs === null || latencyMs === undefined || isNaN(latencyMs)) {
+            return this.coldStartLatencyScore
         }
+        if (latencyMs <= this.latencyBestMs) return 1.0
+        if (latencyMs >= this.latencyWorstMs) return 0.0
+        const range = this.latencyWorstMs - this.latencyBestMs
+        return (this.latencyWorstMs - latencyMs) / range
+    }
 
-        const state = this.getProviderState(providerName)
+    /**
+     * Computes the composite routing score for a single model.
+     *
+     * @param {Object} modelConfig - Entry from ModelRegistry (id, priority, enabled, isFinalFallback, …)
+     * @param {Object} healthTracker - ModelHealthTracker instance
+     * @returns {{ modelId: string, score: number, components: Object }} Score breakdown
+     */
+    scoreModel(modelConfig, healthTracker) {
+        const id = modelConfig.id
 
-        // 1. Capability Score (25 pts max)
-        const capabilityScore = 25
+        const observationCount = healthTracker.getObservationCount(id)
+        const hasSufficientHistory = observationCount >= this.minObservations
 
-        // 2. Availability Score (20 pts max)
-        const availabilityScore = 20
+        // ── Success component ──────────────────────────────────────────────────
+        const rawSuccessRate = healthTracker.getRecentSuccessRate(id)
+        const successScore = hasSufficientHistory && rawSuccessRate !== null
+            ? rawSuccessRate
+            : this.coldStartSuccessRate
 
-        // 3. Health & Reliability Score (35 pts max)
-        const reliabilityScore = Math.round(state.successRate * 30)
-        const failurePenalty = Math.max(0, 5 - (state.consecutiveFailures * 2))
-        const healthScore = reliabilityScore + failurePenalty
+        // ── Latency component ──────────────────────────────────────────────────
+        const avgLatencyMs = healthTracker.getAverageLatencyMs(id)
+        const latencyScore = hasSufficientHistory && avgLatencyMs !== null
+            ? this.normalizeLatency(avgLatencyMs)
+            : this.coldStartLatencyScore
 
-        // 4. Latency Score (20 pts max)
-        // Normalized: avgLatency <= 400ms -> 20pts; 1000ms -> 15pts; 2000ms -> 10pts; 3000ms+ -> 5pts
-        const latencyScore = Math.max(2, Math.min(20, Math.round(20 - (state.averageLatencyMs / 200))))
+        // ── Health component ───────────────────────────────────────────────────
+        const healthScore = healthTracker.isHealthy(id) ? 1.0 : 0.0
 
-        const totalScore = capabilityScore + availabilityScore + healthScore + latencyScore
+        // ── Availability component ─────────────────────────────────────────────
+        // Candidates reaching this point are always enabled & registered → 1.0
+        const availabilityScore = 1.0
 
-        const reasons = []
-        if (state.consecutiveFailures === 0) reasons.push("healthy")
-        else reasons.push(`${state.consecutiveFailures} recent failure(s)`)
-
-        reasons.push(`success rate ${(state.successRate * 100).toFixed(0)}%`)
-        reasons.push(`avg latency ${state.averageLatencyMs}ms`)
-        reasons.push("structured JSON support")
+        // ── Composite weighted score ───────────────────────────────────────────
+        const score =
+            (this.weights.success * successScore) +
+            (this.weights.latency * latencyScore) +
+            (this.weights.health * healthScore) +
+            (this.weights.availability * availabilityScore)
 
         return {
-            score: totalScore,
-            reason: reasons.join(" + "),
-            state,
-            eligible: true
+            modelId: id,
+            score: Math.min(1.0, Math.max(0.0, score)),
+            components: {
+                successScore,
+                latencyScore,
+                healthScore,
+                availabilityScore,
+                observationCount,
+                avgLatencyMs: avgLatencyMs !== null ? avgLatencyMs : null,
+                rawSuccessRate: rawSuccessRate !== null ? rawSuccessRate : null,
+                coldStart: !hasSufficientHistory
+            }
         }
     }
 
     /**
-     * Evaluates a collection of providers and ranks eligible candidates by suitability score.
+     * Selects the best eligible primary model at request time.
      *
-     * @param {import("./provider.interface").AIProvider[]} providers
-     * @param {Object} [evalOptions]
-     * @param {string[]} [evalOptions.excludedProviders] - Provider names to exclude (loop protection)
-     * @param {string} [evalOptions.task] - Task name
-     * @param {Object} [evalOptions.options] - Optional execution overrides
-     * @returns {{ selected: Object|null, candidates: Object[], evaluatedCount: number }}
+     * Rules:
+     *  1. Only enabled, non-finalFallback models that have not yet been attempted
+     *     and pass health.isHealthy() are eligible candidates.
+     *  2. Each candidate is scored using scoreModel().
+     *  3. The candidate with the highest composite score wins.
+     *  4. Ties are broken deterministically by priority (lower number = higher priority).
+     *
+     * @param {Object[]} primaryModels      - All primary (non-finalFallback) model configs
+     * @param {Set<string>} attemptedModels - Model IDs already attempted in this request
+     * @param {Object} healthTracker        - ModelHealthTracker instance
+     * @returns {{ model: Object|null, scored: Array }} Selected model config and full score breakdown
      */
-    evaluate(providers = [], evalOptions = {}) {
-        const { excludedProviders = [], task = "generateInterviewReport", options = {} } = evalOptions
-        const excludedSet = new Set(excludedProviders.map(p => (p || "").toLowerCase()))
+    selectBestModel(primaryModels, attemptedModels, healthTracker) {
+        // Filter to eligible candidates only
+        const eligible = primaryModels.filter(m =>
+            m.enabled &&
+            !m.isFinalFallback &&
+            !attemptedModels.has(m.id) &&
+            healthTracker.isHealthy(m.id)
+        )
 
-        const candidates = []
-
-        for (const provider of providers) {
-            if (!provider || !provider.name) continue
-            const nameLower = provider.name.toLowerCase()
-
-            if (excludedSet.has(nameLower)) {
-                continue
-            }
-
-            const scoring = this.calculateScore(provider, task, options)
-            if (scoring.eligible && scoring.score > 0) {
-                candidates.push({
-                    provider,
-                    score: scoring.score,
-                    reason: scoring.reason,
-                    state: scoring.state
-                })
-            }
+        if (!eligible.length) {
+            return { model: null, scored: [] }
         }
 
-        // Sort candidates descending by score, then higher successRate, then lower latency
-        candidates.sort((a, b) => {
-            if (b.score !== a.score) {
-                return b.score - a.score
+        // Score all candidates
+        const scored = eligible.map(m => ({
+            ...this.scoreModel(m, healthTracker),
+            modelConfig: m
+        }))
+
+        // Sort: highest score first; ties broken by priority (ascending = higher priority)
+        scored.sort((a, b) => {
+            if (Math.abs(a.score - b.score) < 1e-9) {
+                return a.modelConfig.priority - b.modelConfig.priority
             }
-            if (b.state.successRate !== a.state.successRate) {
-                return b.state.successRate - a.state.successRate
-            }
-            if (a.state.averageLatencyMs !== b.state.averageLatencyMs) {
-                return a.state.averageLatencyMs - b.state.averageLatencyMs
-            }
-            return a.provider.name.localeCompare(b.provider.name)
+            return b.score - a.score
         })
 
-        // In test mode, allow options.forceProvider to test specific provider selection
-        if (process.env.NODE_ENV === "test" && options.forceProvider) {
-            const forced = candidates.find(c => c.provider.name.toLowerCase() === options.forceProvider.toLowerCase())
-            if (forced) {
-                return {
-                    selected: forced,
-                    candidates,
-                    evaluatedCount: providers.length
-                }
-            }
-        }
-
-        return {
-            selected: candidates[0] || null,
-            candidates,
-            evaluatedCount: providers.length
-        }
-    }
-
-    /**
-     * Resets runtime state for all providers (useful for test isolation).
-     */
-    resetState() {
-        this.providerState.clear()
+        return { model: scored[0].modelConfig, scored }
     }
 }
 
@@ -273,3 +198,12 @@ const routingEngine = new RoutingEngine()
 
 module.exports = routingEngine
 module.exports.RoutingEngine = RoutingEngine
+module.exports.WEIGHT_SUCCESS = WEIGHT_SUCCESS
+module.exports.WEIGHT_LATENCY = WEIGHT_LATENCY
+module.exports.WEIGHT_HEALTH = WEIGHT_HEALTH
+module.exports.WEIGHT_AVAILABILITY = WEIGHT_AVAILABILITY
+module.exports.LATENCY_BEST_MS = LATENCY_BEST_MS
+module.exports.LATENCY_WORST_MS = LATENCY_WORST_MS
+module.exports.COLD_START_SUCCESS_RATE = COLD_START_SUCCESS_RATE
+module.exports.COLD_START_LATENCY_SCORE = COLD_START_LATENCY_SCORE
+module.exports.MIN_OBSERVATIONS = MIN_OBSERVATIONS
