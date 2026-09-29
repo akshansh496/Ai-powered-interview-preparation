@@ -367,8 +367,8 @@ test("RoutingEngine — Unit Test Suite", async (t) => {
         pr.registerProvider("gemini", mock)
 
         mr.clear()
-        mr.registerModel({ id: "fast-model", provider: "gemini", model: "gemini-fast", priority: 1, enabled: true })
-        mr.registerModel({ id: "slow-model", provider: "gemini", model: "gemini-slow", priority: 2, enabled: true })
+        mr.registerModel({ id: "fast-model", provider: "gemini", model: "gemini-fast", priority: 1, enabled: true , verified: true })
+        mr.registerModel({ id: "slow-model", provider: "gemini", model: "gemini-slow", priority: 2, enabled: true , verified: true })
 
         // Make fast-model actually fast and slow-model slow
         for (let i = 0; i < 5; i++) mh.recordSuccess("fast-model", 400)
@@ -415,8 +415,8 @@ test("RoutingEngine — Unit Test Suite", async (t) => {
         pr.registerProvider("openrouter", new FallbackProvider())
 
         mr.clear()
-        mr.registerModel({ id: "primary-1", provider: "gemini", model: "g-flash", priority: 1, enabled: true })
-        mr.registerModel({ id: "openrouter-free", provider: "openrouter", model: "free-model", priority: 999, enabled: true, isFinalFallback: true })
+        mr.registerModel({ id: "primary-1", provider: "gemini", model: "g-flash", priority: 1, enabled: true , verified: true })
+        mr.registerModel({ id: "openrouter-free", provider: "openrouter", model: "free-model", priority: 999, enabled: true, isFinalFallback: true , verified: true })
 
         const gateway = new AIGateway({ registry: pr, modelRegistry: mr, modelHealth: mh, routingEngine: re })
 

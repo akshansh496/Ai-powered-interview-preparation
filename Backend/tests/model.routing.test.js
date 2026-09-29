@@ -48,9 +48,9 @@ test("Model-Aware Routing - Unit & Resilience Test Suite", async (t) => {
         const gateway = new AIGateway({ registry: providerRegistry, modelRegistry, modelHealth })
 
         modelRegistry.clear()
-        modelRegistry.registerModel({ id: "model-p2", provider: "gemini", model: "gemini-secondary", priority: 2, enabled: true })
-        modelRegistry.registerModel({ id: "model-p1", provider: "gemini", model: "gemini-primary", priority: 1, enabled: true })
-        modelRegistry.registerModel({ id: "model-p3", provider: "openrouter", model: "openrouter-primary", priority: 3, enabled: true })
+        modelRegistry.registerModel({ id: "model-p2", provider: "gemini", model: "gemini-secondary", priority: 2, enabled: true , verified: true })
+        modelRegistry.registerModel({ id: "model-p1", provider: "gemini", model: "gemini-primary", priority: 1, enabled: true , verified: true })
+        modelRegistry.registerModel({ id: "model-p3", provider: "openrouter", model: "openrouter-primary", priority: 3, enabled: true , verified: true })
 
         const geminiMock = new MockProvider("gemini")
         const openrouterMock = new MockProvider("openrouter")
@@ -74,8 +74,8 @@ test("Model-Aware Routing - Unit & Resilience Test Suite", async (t) => {
         const gateway = new AIGateway({ registry: providerRegistry, modelRegistry, modelHealth })
 
         modelRegistry.clear()
-        modelRegistry.registerModel({ id: "model-p1-disabled", provider: "gemini", model: "gemini-primary", priority: 1, enabled: false })
-        modelRegistry.registerModel({ id: "model-p2-enabled", provider: "gemini", model: "gemini-secondary", priority: 2, enabled: true })
+        modelRegistry.registerModel({ id: "model-p1-disabled", provider: "gemini", model: "gemini-primary", priority: 1, enabled: false , verified: true })
+        modelRegistry.registerModel({ id: "model-p2-enabled", provider: "gemini", model: "gemini-secondary", priority: 2, enabled: true , verified: true })
 
         const geminiMock = new MockProvider("gemini")
         providerRegistry.registerProvider("gemini", geminiMock)
@@ -96,8 +96,8 @@ test("Model-Aware Routing - Unit & Resilience Test Suite", async (t) => {
         const gateway = new AIGateway({ registry: providerRegistry, modelRegistry, modelHealth })
 
         modelRegistry.clear()
-        modelRegistry.registerModel({ id: "model-a", provider: "gemini", model: "gemini-fast", priority: 1, enabled: true, timeoutMs: 100 })
-        modelRegistry.registerModel({ id: "model-b", provider: "openrouter", model: "openrouter-fast", priority: 2, enabled: true, timeoutMs: 100 })
+        modelRegistry.registerModel({ id: "model-a", provider: "gemini", model: "gemini-fast", priority: 1, enabled: true, timeoutMs: 100 , verified: true })
+        modelRegistry.registerModel({ id: "model-b", provider: "openrouter", model: "openrouter-fast", priority: 2, enabled: true, timeoutMs: 100 , verified: true })
 
         const geminiMock = new MockProvider("gemini")
         const openrouterMock = new MockProvider("openrouter")
@@ -128,9 +128,9 @@ test("Model-Aware Routing - Unit & Resilience Test Suite", async (t) => {
         const gateway = new AIGateway({ registry: providerRegistry, modelRegistry, modelHealth })
 
         modelRegistry.clear()
-        modelRegistry.registerModel({ id: "m1", provider: "gemini", model: "m1", priority: 1, enabled: true })
-        modelRegistry.registerModel({ id: "m2", provider: "gemini", model: "m2", priority: 2, enabled: true })
-        modelRegistry.registerModel({ id: "m3", provider: "openrouter", model: "m3", priority: 3, enabled: true })
+        modelRegistry.registerModel({ id: "m1", provider: "gemini", model: "m1", priority: 1, enabled: true , verified: true })
+        modelRegistry.registerModel({ id: "m2", provider: "gemini", model: "m2", priority: 2, enabled: true , verified: true })
+        modelRegistry.registerModel({ id: "m3", provider: "openrouter", model: "m3", priority: 3, enabled: true , verified: true })
 
         providerRegistry.registerProvider("gemini", new MockProvider("gemini"))
         providerRegistry.registerProvider("openrouter", new MockProvider("openrouter"))
@@ -162,8 +162,8 @@ test("Model-Aware Routing - Unit & Resilience Test Suite", async (t) => {
         const gateway = new AIGateway({ registry: providerRegistry, modelRegistry, modelHealth })
 
         modelRegistry.clear()
-        modelRegistry.registerModel({ id: "m1", provider: "gemini", model: "m1", priority: 1, enabled: true })
-        modelRegistry.registerModel({ id: "m2", provider: "gemini", model: "m2", priority: 2, enabled: true })
+        modelRegistry.registerModel({ id: "m1", provider: "gemini", model: "m1", priority: 1, enabled: true , verified: true })
+        modelRegistry.registerModel({ id: "m2", provider: "gemini", model: "m2", priority: 2, enabled: true , verified: true })
 
         providerRegistry.registerProvider("gemini", new MockProvider("gemini"))
 
@@ -188,8 +188,8 @@ test("Model-Aware Routing - Unit & Resilience Test Suite", async (t) => {
         const gateway = new AIGateway({ registry: providerRegistry, modelRegistry, modelHealth })
 
         modelRegistry.clear()
-        modelRegistry.registerModel({ id: "model-fragile", provider: "gemini", model: "fragile-1", priority: 1, enabled: true })
-        modelRegistry.registerModel({ id: "model-stable", provider: "openrouter", model: "stable-1", priority: 2, enabled: true })
+        modelRegistry.registerModel({ id: "model-fragile", provider: "gemini", model: "fragile-1", priority: 1, enabled: true , verified: true })
+        modelRegistry.registerModel({ id: "model-stable", provider: "openrouter", model: "stable-1", priority: 2, enabled: true , verified: true })
 
         providerRegistry.registerProvider("gemini", new MockProvider("gemini"))
         providerRegistry.registerProvider("openrouter", new MockProvider("openrouter"))
@@ -228,8 +228,8 @@ test("Model-Aware Routing - Unit & Resilience Test Suite", async (t) => {
         const gateway = new AIGateway({ registry: providerRegistry, modelRegistry, modelHealth })
 
         modelRegistry.clear()
-        modelRegistry.registerModel({ id: "m1", provider: "gemini", model: "m1", priority: 1, enabled: true })
-        modelRegistry.registerModel({ id: "m2", provider: "openrouter", model: "m2", priority: 2, enabled: true })
+        modelRegistry.registerModel({ id: "m1", provider: "gemini", model: "m1", priority: 1, enabled: true , verified: true })
+        modelRegistry.registerModel({ id: "m2", provider: "openrouter", model: "m2", priority: 2, enabled: true , verified: true })
 
         providerRegistry.registerProvider("gemini", new MockProvider("gemini"))
         providerRegistry.registerProvider("openrouter", new MockProvider("openrouter"))
@@ -267,10 +267,10 @@ test("Model-Aware Routing - Unit & Resilience Test Suite", async (t) => {
         const gateway = new AIGateway({ registry: providerRegistry, modelRegistry, modelHealth })
 
         modelRegistry.clear()
-        modelRegistry.registerModel({ id: "m1", provider: "gemini", model: "gemini-primary", priority: 1, enabled: true })
-        modelRegistry.registerModel({ id: "m2", provider: "gemini", model: "gemini-secondary", priority: 2, enabled: true })
-        modelRegistry.registerModel({ id: "m3", provider: "openrouter", model: "openrouter-custom", priority: 3, enabled: true })
-        modelRegistry.registerModel({ id: "or-free", provider: "openrouter", model: "openrouter/free", priority: 999, enabled: true, isFinalFallback: true })
+        modelRegistry.registerModel({ id: "m1", provider: "gemini", model: "gemini-primary", priority: 1, enabled: true , verified: true })
+        modelRegistry.registerModel({ id: "m2", provider: "gemini", model: "gemini-secondary", priority: 2, enabled: true , verified: true })
+        modelRegistry.registerModel({ id: "m3", provider: "openrouter", model: "openrouter-custom", priority: 3, enabled: true , verified: true })
+        modelRegistry.registerModel({ id: "or-free", provider: "openrouter", model: "openrouter/free", priority: 999, enabled: true, isFinalFallback: true , verified: true })
 
         providerRegistry.registerProvider("gemini", new MockProvider("gemini"))
         providerRegistry.registerProvider("openrouter", new MockProvider("openrouter"))
@@ -302,8 +302,8 @@ test("Model-Aware Routing - Unit & Resilience Test Suite", async (t) => {
         const gateway = new AIGateway({ registry: providerRegistry, modelRegistry, modelHealth })
 
         modelRegistry.clear()
-        modelRegistry.registerModel({ id: "m1", provider: "gemini", model: "gemini-1", priority: 1, enabled: true })
-        modelRegistry.registerModel({ id: "or-free", provider: "openrouter", model: "openrouter/free", priority: 999, enabled: true, isFinalFallback: true })
+        modelRegistry.registerModel({ id: "m1", provider: "gemini", model: "gemini-1", priority: 1, enabled: true , verified: true })
+        modelRegistry.registerModel({ id: "or-free", provider: "openrouter", model: "openrouter/free", priority: 999, enabled: true, isFinalFallback: true , verified: true })
 
         providerRegistry.registerProvider("gemini", new MockProvider("gemini"))
         providerRegistry.registerProvider("openrouter", new MockProvider("openrouter"))
@@ -329,8 +329,8 @@ test("Model-Aware Routing - Unit & Resilience Test Suite", async (t) => {
         const gateway = new AIGateway({ registry: providerRegistry, modelRegistry, modelHealth })
 
         modelRegistry.clear()
-        modelRegistry.registerModel({ id: "m1", provider: "gemini", model: "gemini-primary", priority: 1, enabled: true })
-        modelRegistry.registerModel({ id: "m2", provider: "openrouter", model: "openrouter-primary", priority: 2, enabled: true })
+        modelRegistry.registerModel({ id: "m1", provider: "gemini", model: "gemini-primary", priority: 1, enabled: true , verified: true })
+        modelRegistry.registerModel({ id: "m2", provider: "openrouter", model: "openrouter-primary", priority: 2, enabled: true , verified: true })
 
         providerRegistry.registerProvider("gemini", new MockProvider("gemini"))
         providerRegistry.registerProvider("openrouter", new MockProvider("openrouter"))
@@ -353,7 +353,7 @@ test("Model-Aware Routing - Unit & Resilience Test Suite", async (t) => {
 
         const secretKey = "sk-or-secret-sensitive-key-999"
         modelRegistry.clear()
-        modelRegistry.registerModel({ id: "m1", provider: "openrouter", model: "m1", priority: 1, enabled: true })
+        modelRegistry.registerModel({ id: "m1", provider: "openrouter", model: "m1", priority: 1, enabled: true , verified: true })
 
         const mockProvider = new MockProvider("openrouter")
         mockProvider.apiKey = secretKey
@@ -379,8 +379,8 @@ test("Model-Aware Routing - Unit & Resilience Test Suite", async (t) => {
         const gateway = new AIGateway({ registry: providerRegistry, modelRegistry, modelHealth })
 
         modelRegistry.clear()
-        modelRegistry.registerModel({ id: "model-a", provider: "gemini", model: "gemini-a", priority: 1, enabled: true })
-        modelRegistry.registerModel({ id: "model-b", provider: "openrouter", model: "openrouter-b", priority: 2, enabled: true })
+        modelRegistry.registerModel({ id: "model-a", provider: "gemini", model: "gemini-a", priority: 1, enabled: true , verified: true })
+        modelRegistry.registerModel({ id: "model-b", provider: "openrouter", model: "openrouter-b", priority: 2, enabled: true , verified: true })
 
         providerRegistry.registerProvider("gemini", new MockProvider("gemini"))
         providerRegistry.registerProvider("openrouter", new MockProvider("openrouter"))

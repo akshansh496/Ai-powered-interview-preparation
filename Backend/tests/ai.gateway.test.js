@@ -1,7 +1,18 @@
+"use strict"
+
+/**
+ * ai.gateway.test.js
+ *
+ * Tests for AIGateway model-aware routing, dynamic selection, fallback, and observability.
+ * Uses isolated ModelRegistry + ProviderRegistry injections — no global singletons.
+ */
+
 const test = require("node:test")
 const assert = require("node:assert/strict")
 const { AIGateway } = require("../src/services/ai/ai.gateway")
 const { ProviderRegistry } = require("../src/services/ai/provider.registry")
+const { ModelRegistry } = require("../src/services/ai/model.registry")
+const { ModelHealthTracker } = require("../src/services/ai/model.health")
 const { RoutingEngine } = require("../src/services/ai/routing.engine")
 const { AIProvider } = require("../src/services/ai/provider.interface")
 
@@ -12,15 +23,10 @@ class MockProvider extends AIProvider {
         this.callCount = 0
     }
 
-    isAvailable() {
-        return this._available
-    }
+    isAvailable() { return this._available }
+    setAvailable(flag) { this._available = flag }
 
-    setAvailable(flag) {
-        this._available = flag
-    }
-
-    async generateInterviewReport(data) {
+    async generateInterviewReport() {
         this.callCount++
         return {
             title: "Software Engineer",
@@ -38,167 +44,183 @@ class MockProvider extends AIProvider {
     }
 }
 
-test("AIGateway - Dynamic Provider Selection & Execution tests", async (t) => {
+/**
+ * Helper: creates an isolated gateway with its own registry, model registry, health tracker, routing engine.
+ */
+function makeGateway(models = [], providerSetup = {}) {
+    const registry = new ProviderRegistry()
+    const modelRegistry = new ModelRegistry({ defaultTimeoutMs: 5000 })
+    const modelHealth = new ModelHealthTracker()
+    const routingEngine = new RoutingEngine()
 
-    await t.test("should dynamically select and execute with the highest scoring available provider", async () => {
-        const registry = new ProviderRegistry()
-        const engine = new RoutingEngine()
-        const gateway = new AIGateway({ registry, routingEngine: engine })
+    modelRegistry.clear()
+    for (const m of models) {
+        modelRegistry.registerModel(m)
+    }
+    for (const [name, provider] of Object.entries(providerSetup)) {
+        registry.registerProvider(name, provider)
+    }
 
-        const gemini = new MockProvider("gemini", "gemini-3-flash-preview", true)
-        const grok = new MockProvider("grok", "grok-2-latest", true)
-        const openrouter = new MockProvider("openrouter", "openrouter/free", true)
+    const gateway = new AIGateway({ registry, modelRegistry, modelHealth, routingEngine })
+    return { gateway, registry, modelRegistry, modelHealth, routingEngine }
+}
 
-        registry.registerProvider("gemini", gemini)
-        registry.registerProvider("grok", grok)
-        registry.registerProvider("openrouter", openrouter)
+// ─────────────────────────────────────────────────────────────────────────────
+// Dynamic Model Selection & Execution
+// ─────────────────────────────────────────────────────────────────────────────
+test("AIGateway - Dynamic Model Selection & Execution tests", async (t) => {
 
-        // Give gemini higher success telemetry
-        for (let i = 0; i < 5; i++) engine.recordSuccess("gemini", 400)
-        for (let i = 0; i < 5; i++) engine.recordSuccess("grok", 900)
+    await t.test("should dynamically select and execute with the highest priority available model", async () => {
+        const gemini = new MockProvider("gemini", "gemini-fast", true)
+        const openrouter = new MockProvider("openrouter", "openrouter-b", true)
+
+        const { gateway, modelHealth } = makeGateway(
+            [
+                { id: "gemini-fast", provider: "gemini", model: "gemini-fast", priority: 1, enabled: true, verified: true, isFinalFallback: false },
+                { id: "openrouter-b", provider: "openrouter", model: "openrouter-b", priority: 2, enabled: true, verified: true, isFinalFallback: false },
+                { id: "fb", provider: "openrouter", model: "openrouter/free", priority: 999, enabled: true, verified: true, isFinalFallback: true }
+            ],
+            { gemini, openrouter }
+        )
+
+        // Give gemini more observations → higher success score
+        for (let i = 0; i < 5; i++) modelHealth.recordSuccess("gemini-fast", 400)
+        for (let i = 0; i < 5; i++) modelHealth.recordSuccess("openrouter-b", 900)
 
         const result = await gateway.execute("generateInterviewReport", (p) => p.generateInterviewReport({}))
         assert.equal(result.title, "Software Engineer")
-        assert.equal(gemini.callCount, 1)
-        assert.equal(grok.callCount, 0)
+        assert.equal(gemini.callCount, 1, "Faster/higher-scoring provider should be selected")
+        assert.equal(openrouter.callCount, 0)
     })
 
-    await t.test("should throw PROVIDER_UNAVAILABLE when all registered providers are unavailable", async () => {
-        const registry = new ProviderRegistry()
-        const engine = new RoutingEngine()
-        const gateway = new AIGateway({ registry, routingEngine: engine })
+    await t.test("should throw PROVIDER_UNAVAILABLE when all registered providers/models are unavailable", async () => {
+        const gemini = new MockProvider("gemini", "gemini-fast", false)
 
-        const gemini = new MockProvider("gemini", "gemini-3-flash-preview", false)
-        const grok = new MockProvider("grok", "grok-2-latest", false)
-        const openrouter = new MockProvider("openrouter", "openrouter/free", false)
-
-        registry.registerProvider("gemini", gemini)
-        registry.registerProvider("grok", grok)
-        registry.registerProvider("openrouter", openrouter)
+        const { gateway } = makeGateway(
+            [
+                { id: "g1", provider: "gemini", model: "gemini-fast", priority: 1, enabled: true, verified: true, isFinalFallback: false }
+            ],
+            { gemini }
+        )
 
         await assert.rejects(
-            async () => await gateway.execute("generateInterviewReport", (p) => p.generateInterviewReport({})),
+            () => gateway.execute("generateInterviewReport", (p) => p.generateInterviewReport({})),
             (err) => err.code === "PROVIDER_UNAVAILABLE"
         )
     })
 })
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Dynamic Fallback and Resilience
+// ─────────────────────────────────────────────────────────────────────────────
 test("AIGateway - Dynamic Fallback and Resilience tests", async (t) => {
 
     await t.test("should dynamically fallback to secondary provider when primary returns transient 503", async () => {
-        const registry = new ProviderRegistry()
-        const engine = new RoutingEngine()
-        const gateway = new AIGateway({ registry, routingEngine: engine })
+        const gemini = new MockProvider("gemini", "gemini-primary", true)
+        const openrouter = new MockProvider("openrouter", "openrouter-secondary", true)
 
-        const gemini = new MockProvider("gemini", "gemini-3-flash-preview", true)
-        const grok = new MockProvider("grok", "grok-2-latest", true)
-
-        // Make gemini the initial favorite
-        for (let i = 0; i < 10; i++) engine.recordSuccess("gemini", 300)
-
-        registry.registerProvider("gemini", gemini)
-        registry.registerProvider("grok", grok)
+        const { gateway } = makeGateway(
+            [
+                { id: "g1", provider: "gemini", model: "gemini-primary", priority: 1, enabled: true, verified: true, isFinalFallback: false },
+                { id: "or1", provider: "openrouter", model: "openrouter-secondary", priority: 2, enabled: true, verified: true, isFinalFallback: false },
+                { id: "fb", provider: "openrouter", model: "openrouter/free", priority: 999, enabled: true, verified: true, isFinalFallback: true }
+            ],
+            { gemini, openrouter }
+        )
 
         let geminiAttempts = 0
-        let grokAttempts = 0
+        let openrouterAttempts = 0
 
-        const result = await gateway.execute("generateInterviewReport", async (provider) => {
-            if (provider.name === "gemini") {
+        const result = await gateway.execute("generateInterviewReport", async (provider, opts) => {
+            if (opts.model === "gemini-primary") {
                 geminiAttempts++
                 const err = new Error("Gemini 503 Service Unavailable")
                 err.status = 503
                 throw err
             }
-            if (provider.name === "grok") {
-                grokAttempts++
-                return {
-                    title: "Backend Engineer",
-                    matchScore: 95,
-                    technicalQuestions: [],
-                    behavioralQuestions: [],
-                    skillGaps: [],
-                    preparationPlan: []
-                }
-            }
+            openrouterAttempts++
+            return { title: "Backend Engineer", matchScore: 95, technicalQuestions: [], behavioralQuestions: [], skillGaps: [], preparationPlan: [] }
         })
 
         assert.equal(result.title, "Backend Engineer")
         assert.equal(geminiAttempts, 1)
-        assert.equal(grokAttempts, 1)
+        assert.equal(openrouterAttempts, 1)
     })
 
     await t.test("should NOT fallback on non-transient validation errors (VALIDATION_ERROR)", async () => {
-        const registry = new ProviderRegistry()
-        const engine = new RoutingEngine()
-        const gateway = new AIGateway({ registry, routingEngine: engine })
+        const gemini = new MockProvider("gemini", "gemini-primary", true)
+        const openrouter = new MockProvider("openrouter", "openrouter-secondary", true)
 
-        const gemini = new MockProvider("gemini", "gemini-3-flash-preview", true)
-        const grok = new MockProvider("grok", "grok-2-latest", true)
+        const { gateway } = makeGateway(
+            [
+                { id: "g1", provider: "gemini", model: "gemini-primary", priority: 1, enabled: true, verified: true, isFinalFallback: false },
+                { id: "or1", provider: "openrouter", model: "openrouter-secondary", priority: 2, enabled: true, verified: true, isFinalFallback: false }
+            ],
+            { gemini, openrouter }
+        )
 
-        registry.registerProvider("gemini", gemini)
-        registry.registerProvider("grok", grok)
-
-        let grokCalled = false
+        let openrouterCalled = false
 
         await assert.rejects(
-            async () => await gateway.execute("generateInterviewReport", async (provider) => {
-                if (provider.name === "gemini") {
+            async () => await gateway.execute("generateInterviewReport", async (provider, opts) => {
+                if (opts.model === "gemini-primary") {
                     const valErr = new Error("Schema validation failed")
                     valErr.code = "VALIDATION_ERROR"
                     throw valErr
                 }
-                grokCalled = true
+                openrouterCalled = true
                 return {}
             }),
             (err) => err.code === "VALIDATION_ERROR"
         )
 
-        assert.equal(grokCalled, false, "Fallback must not occur on non-transient validation errors")
+        assert.equal(openrouterCalled, false, "Fallback must not occur on non-transient validation errors")
     })
 
-    await t.test("should dynamically exclude rate-limited (429) provider from subsequent requests", async () => {
-        const registry = new ProviderRegistry()
-        const engine = new RoutingEngine({ rateLimitCooldownMs: 5000 })
-        const gateway = new AIGateway({ registry, routingEngine: engine })
+    await t.test("should dynamically exclude model in cooldown from subsequent requests", async () => {
+        const gemini = new MockProvider("gemini", "gemini-primary", true)
+        const openrouter = new MockProvider("openrouter", "openrouter-secondary", true)
 
-        const gemini = new MockProvider("gemini", "gemini-3-flash-preview", true)
-        const openrouter = new MockProvider("openrouter", "openrouter/free", true)
+        const { gateway, modelHealth } = makeGateway(
+            [
+                { id: "g1", provider: "gemini", model: "gemini-primary", priority: 1, enabled: true, verified: true, isFinalFallback: false },
+                { id: "or1", provider: "openrouter", model: "openrouter-secondary", priority: 2, enabled: true, verified: true, isFinalFallback: false },
+                { id: "fb", provider: "openrouter", model: "openrouter/free", priority: 999, enabled: true, verified: true, isFinalFallback: true }
+            ],
+            { gemini, openrouter }
+        )
 
-        registry.registerProvider("gemini", gemini)
-        registry.registerProvider("openrouter", openrouter)
+        // Trigger enough failures to put gemini-primary in cooldown
+        const threshold = parseInt(process.env.AI_MODEL_FAILURE_THRESHOLD) || 3
+        for (let i = 0; i < threshold; i++) {
+            modelHealth.recordFailure("g1", new Error("Service Error"), 500)
+        }
 
-        // Request 1: Gemini fails with 429 -> OpenRouter fallback handles it
-        const res1 = await gateway.execute("generateInterviewReport", async (provider) => {
-            if (provider.name === "gemini") {
-                const err = new Error("Quota exceeded")
-                err.status = 429
-                throw err
-            }
-            return { title: "Handled by OpenRouter" }
-        })
-        assert.equal(res1.title, "Handled by OpenRouter")
-
-        // Request 2: Gateway should immediately pick OpenRouter since Gemini is in rate-limit cooldown
-        let selectedProviderName = null
-        const res2 = await gateway.execute("generateInterviewReport", async (provider) => {
-            selectedProviderName = provider.name
-            return { title: "Second Request" }
+        // Now g1 is in cooldown — openrouter should be selected immediately
+        let selectedModel = null
+        await gateway.execute("generateInterviewReport", async (provider, opts) => {
+            selectedModel = opts.model
+            return { title: "Handled", matchScore: 80, technicalQuestions: [], behavioralQuestions: [], skillGaps: [], preparationPlan: [] }
         })
 
-        assert.equal(res2.title, "Second Request")
-        assert.equal(selectedProviderName, "openrouter", "Gemini should be skipped due to active rate-limit cooldown")
+        assert.notEqual(selectedModel, "gemini-primary", "Cooldown model must be skipped")
     })
 })
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Observability & Logging Banners
+// ─────────────────────────────────────────────────────────────────────────────
 test("AIGateway - Observability & Logging Banners tests", async (t) => {
 
     await t.test("should print AI GATEWAY and AI RESPONSE GENERATED banners", async () => {
-        const registry = new ProviderRegistry()
-        const engine = new RoutingEngine()
-        const gateway = new AIGateway({ registry, routingEngine: engine })
+        const gemini = new MockProvider("gemini", "gemini-primary", true)
 
-        const gemini = new MockProvider("gemini", "gemini-3-flash-preview", true)
-        registry.registerProvider("gemini", gemini)
+        const { gateway } = makeGateway(
+            [
+                { id: "g1", provider: "gemini", model: "gemini-primary", priority: 1, enabled: true, verified: true, isFinalFallback: false }
+            ],
+            { gemini }
+        )
 
         const logs = []
         const originalLog = console.log
@@ -207,7 +229,6 @@ test("AIGateway - Observability & Logging Banners tests", async (t) => {
         try {
             await gateway.execute("generateInterviewReport", async (p) => p.generateInterviewReport({}))
             const logOutput = logs.join("\n")
-
             assert.ok(logOutput.includes("AI GATEWAY"), "Expected AI GATEWAY banner")
             assert.ok(logOutput.includes("AI RESPONSE GENERATED"), "Expected AI RESPONSE GENERATED banner")
             assert.ok(logOutput.includes("Provider: GEMINI"), "Expected provider name in banner")

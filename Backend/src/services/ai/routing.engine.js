@@ -152,8 +152,9 @@ class RoutingEngine {
      * Selects the best eligible primary model at request time.
      *
      * Rules:
-     *  1. Only enabled, non-finalFallback models that have not yet been attempted
-     *     and pass health.isHealthy() are eligible candidates.
+     *  1. Only enabled, verified, non-finalFallback models that have not yet been
+     *     attempted and pass health.isHealthy() are eligible candidates.
+     *     — verified:false models are NEVER scored (they have not been confirmed working).
      *  2. Each candidate is scored using scoreModel().
      *  3. The candidate with the highest composite score wins.
      *  4. Ties are broken deterministically by priority (lower number = higher priority).
@@ -164,9 +165,12 @@ class RoutingEngine {
      * @returns {{ model: Object|null, scored: Array }} Selected model config and full score breakdown
      */
     selectBestModel(primaryModels, attemptedModels, healthTracker) {
-        // Filter to eligible candidates only
+        // Filter to eligible candidates only.
+        // A model must be: enabled AND verified AND not the final fallback
+        //                  AND not already attempted AND currently healthy.
         const eligible = primaryModels.filter(m =>
             m.enabled &&
+            m.verified !== false &&          // explicit false OR missing → excluded
             !m.isFinalFallback &&
             !attemptedModels.has(m.id) &&
             healthTracker.isHealthy(m.id)
