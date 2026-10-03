@@ -4,13 +4,13 @@
 
 **Overall Status:** IN PROGRESS
 
-**Current Phase:** Phase 7 — Intelligent AI Gateway & Runtime Provider Routing
+**Current Phase:** Phase 8 — Health-Aware Multi-Model AI Routing with Fallback
 
-**Completed Through:** Phase 7
+**Completed Through:** Phase 8
 
 **Current Branch:** `feature/multi-ai-router`
 
-**Last Updated:** 2026-09-20
+**Last Updated:** 2026-09-27
 
 **Next Recommended Step:** Response caching layer (Redis / LRU) & production observability probes
 
@@ -27,7 +27,8 @@
 | Phase 5 | Multi-AI Provider Architecture & Router | ✅ COMPLETED |
 | Phase 6 | Documentation Synchronization | ✅ COMPLETED |
 | Phase 7 | Intelligent AI Gateway & Runtime Provider Routing | ✅ COMPLETED |
-| Phase 8 | Response Caching & Production Observability | ⏳ NOT STARTED |
+| Phase 8 | Health-Aware Multi-Model AI Routing with Fallback | ✅ COMPLETED |
+| Phase 9 | Response Caching & Production Observability | ⏳ NOT STARTED |
 
 ---
 
@@ -55,8 +56,8 @@
 - Updated frontend state management and dashboard with dynamic pagination controls and empty state views.
 
 ### Phase 5 — Multi-AI Provider Architecture & Router
-- Created `ProviderRegistry` (`provider.registry.js`) managing active providers (`gemini`, `grok`, `openrouter`).
-- Built xAI Grok provider (`grok.provider.js`) with native `fetch` and OpenAI-compatible completions.
+- Created `ProviderRegistry` (`provider.registry.js`) managing active providers (`gemini`, `openrouter`).
+- Removed Grok provider completely.
 - Built OpenRouter provider (`openrouter.provider.js`) with free model support (`openrouter/free`) and dynamic `actualModel` tracking.
 - Implemented robust `extractAndParseJson` helper supporting raw JSON, Markdown code blocks, and responses embedded in conversational text.
 
@@ -65,43 +66,49 @@
 - Created and synchronized [PROJECT_STATUS.md](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/PROJECT_STATUS.md) as the project stage single source of truth.
 
 ### Phase 7 — Intelligent AI Gateway & Runtime Provider Routing
-- Eliminated static default provider dependency (`AI_DEFAULT_PROVIDER` / `AI_FALLBACK_PROVIDER` removed).
+- Eliminated static default provider dependency.
 - Built `RoutingEngine` (`routing.engine.js`) tracking bounded in-memory runtime health, failure counts, rolling latency, and rate-limit cooldown timers.
 - Implemented deterministic suitability scoring (0-100) weighting capability (25%), availability (20%), health & reliability (35%), and latency (20%).
-- Built `AIGateway` (`ai.gateway.js`) evaluating all registered providers at runtime for every request, with loop-protected dynamic fallback on transient infrastructure failures.
 - Added structured telemetry and formatted console banners (`AI GATEWAY`, `AI PROVIDER FALLBACK`, `AI RESPONSE GENERATED`).
-- Refactored `ai.service.js` and `ai.router.js` to route via `aiGateway.execute()`.
+
+### Phase 8 — Health-Aware Multi-Model AI Routing with Fallback
+- Created centralized `ModelRegistry` (`model.registry.js`) managing individual models, priority order, and configurable timeouts.
+- Built `ModelHealthTracker` (`model.health.js`) implementing in-memory circuit breakers with failure thresholds (`AI_MODEL_FAILURE_THRESHOLD=3`), cooldown intervals (`AI_MODEL_COOLDOWN_MS=300000`), and automated probe request recovery.
+- Upgraded `AIGateway` (`ai.gateway.js`) to execute strict model-level prioritization, timeout abortion via `AbortController`, single attempt per model loop protection, and designated `openrouter/free` final availability fallback.
+- Added comprehensive unit test suite in `model.routing.test.js` (83/83 unit tests passing).
+- Ran automated AI latency benchmark demonstrating 0% failure rate for AI Router with model fallback.
 
 ---
 
 ## Current Work
 
 ### Current Objective
-Prepare Phase 8 scaling items: response caching and production health probes.
+Prepare Phase 9 scaling items: response caching and production health probes.
 
 ### Tasks
-- [x] Implement `RoutingEngine` for runtime provider evaluation and scoring
-- [x] Implement `AIGateway` for dynamic execution and resilient fallback
-- [x] Remove static default provider configuration
-- [x] Verify backend unit tests (77/77 passed)
-- [x] Verify frontend E2E Playwright tests (10/10 passed)
-- [ ] Implement response caching layer for duplicate candidate queries (Phase 8)
-- [ ] Implement production health check probes and latency histograms (Phase 8)
+- [x] Implement centralized `ModelRegistry` for model-level routing
+- [x] Implement `ModelHealthTracker` with circuit breakers and cooldown probes
+- [x] Implement strict per-request timeouts with native request abortion
+- [x] Enforce single-attempt loop protection and designated `openrouter/free` final fallback
+- [x] Verify backend unit tests (83/83 passed)
+- [x] Run AI latency benchmark (`npm run benchmark:ai`)
+- [ ] Implement response caching layer for duplicate candidate queries (Phase 9)
+- [ ] Implement production health check probes and latency histograms (Phase 9)
 
 ---
 
 ## Next Steps
 
-1. **Response Caching Layer (Phase 8)**: Implement in-memory LRU / Redis cache for identical job descriptions & resumes to reduce LLM API latency and costs.
+1. **Response Caching Layer (Phase 9)**: Implement in-memory LRU / Redis cache for identical job descriptions & resumes to reduce LLM API latency and costs.
 2. **Production Health Checks & Monitoring**: Expose `/api/health` probe reporting AI provider readiness and database connectivity.
-3. **Future AI Providers**: Add OpenAI (`gpt-4o`) and Anthropic Claude (`claude-3-5-sonnet`) providers via `AIProvider` contract.
+3. **Future AI Models**: Add models dynamically via `ModelRegistry.registerModel()`.
 
 ---
 
 ## Testing Status
 
 ### Backend
-- Unit tests: `77/77`
+- Unit tests: `83/83`
 - Status: `PASS`
 
 ### Frontend
@@ -109,27 +116,25 @@ Prepare Phase 8 scaling items: response caching and production health probes.
 - Status: `PASS`
 
 ### Last Verification
-`2026-09-20`
+`2026-09-27`
 
 ---
 
 ## AI Architecture Status
 
-### Providers
-- Gemini: `ACTIVE` (`gemini-3-flash-preview`)
-- Grok: `ACTIVE` (`grok-2-latest`)
-- OpenRouter: `ACTIVE` (`openrouter/free`)
-- Future providers: `OpenAI (GPT-4o)`, `Anthropic (Claude 3.5 Sonnet)`, `DeepSeek (V3/R1)`
+### Providers & Models
+- Gemini: `ACTIVE` (`gemini-3-flash-preview` [P1], `gemini-2.0-flash` [P2])
+- OpenRouter: `ACTIVE` (`google/gemini-2.0-flash-exp:free` [P3], `meta-llama/llama-3.2-3b-instruct:free` [P4], `openrouter/free` [P999 Final Fallback])
 
 ### Gateway & Routing
-- Default provider: `REMOVED (Dynamic runtime selection)`
-- Dynamic provider selection: `IMPLEMENTED`
-- Runtime provider evaluation: `IMPLEMENTED`
-- Health-aware routing: `IMPLEMENTED`
-- Rate-limit-aware routing: `IMPLEMENTED`
-- Dynamic fallback: `IMPLEMENTED`
-- Loop protection: `IMPLEMENTED`
-- Structured logging: `IMPLEMENTED`
+- Model-aware routing: `IMPLEMENTED`
+- Priority-based selection: `IMPLEMENTED`
+- Model health tracking & circuit breaker: `IMPLEMENTED`
+- Cooldown & probe recovery: `IMPLEMENTED`
+- Strict request timeout with AbortController: `IMPLEMENTED`
+- Loop protection (1 attempt/model): `IMPLEMENTED`
+- OpenRouter/free final fallback: `IMPLEMENTED`
+- Structured logging & telemetry: `IMPLEMENTED`
 
 ---
 
@@ -139,8 +144,8 @@ Prepare Phase 8 scaling items: response caching and production health probes.
 - Request body limits: `IMPLEMENTED`
 - Database indexing: `IMPLEMENTED`
 - Pagination: `IMPLEMENTED`
-- Dynamic provider evaluation: `IMPLEMENTED`
-- Provider fallback: `IMPLEMENTED`
+- Model-aware routing & health tracking: `IMPLEMENTED`
+- Multi-model fallback & circuit breakers: `IMPLEMENTED`
 - Multi-format JSON extraction: `IMPLEMENTED`
 - Zod validation: `IMPLEMENTED`
 
@@ -154,18 +159,18 @@ Prepare Phase 8 scaling items: response caching and production health probes.
 **Main Branch Modified:** NO
 
 **Last Major Commit/Change:**
-Implemented Intelligent AI Gateway (`ai.gateway.js`) and Routing Engine (`routing.engine.js`) replacing static default providers with dynamic runtime suitability scoring, rate-limit cooldowns, and loop-protected fallback. Verified with 77 backend unit tests and 10 Playwright E2E tests.
+Implemented Health-Aware Multi-Model AI Routing with Fallback, Model Registry, Circuit Breaker Health Tracker, hard request timeouts, loop protection, and openrouter/free final fallback. Verified with 83 backend unit tests, AI latency benchmark, and frontend build.
 
 ---
 
 ## Changelog
 
-### 2026-09-20
-- **Intelligent AI Gateway & Routing Engine**: Implemented `ai.gateway.js` and `routing.engine.js`. Removed hardcoded default providers (`AI_DEFAULT_PROVIDER` and `AI_FALLBACK_PROVIDER`).
-- **Dynamic Suitability Scoring**: Implemented 0-100 deterministic scoring engine evaluating availability, capability, rolling success rate, consecutive failure penalty, and rolling average latency.
-- **Dynamic Resilient Fallback**: Re-evaluates remaining eligible providers on transient HTTP 429/503/timeout failures with active rate-limit cooldowns and loop protection.
-- **Observability**: Added `AI GATEWAY`, `AI PROVIDER FALLBACK`, and `AI RESPONSE GENERATED` logging banners with structured telemetry.
-- **Testing**: Added unit test suites `routing.engine.test.js` and `ai.gateway.test.js`. Verified 77/77 backend tests and 10/10 frontend Playwright tests pass.
+### 2026-09-27
+- **Model Registry (`model.registry.js`)**: Centralized individual AI model registry mapping provider, model name, priority, enabled state, timeoutMs, and final fallback flag.
+- **Model Health Tracker (`model.health.js`)**: Implemented in-memory circuit breaker tracking consecutive failures, latency, and cooldown intervals with probe recovery.
+- **Model-Aware AI Gateway (`ai.gateway.js`)**: Upgraded gateway execution to select healthy models by priority, enforce strict timeouts and `AbortController` cancellation, prevent retry loops on the same model, and route to `openrouter/free` strictly as the final availability fallback.
+- **Test Suite (`model.routing.test.js`)**: Added 16+ unit and resilience tests covering priority selection, disabled model skipping, timeout abortion, transient 5xx fallback, circuit breaker cooldowns, probe recovery, and loop protection. (83/83 tests passing).
+- **Benchmark Run**: Verified latency benchmark runner (`npm run benchmark:ai`), achieving 0% failure rate for AI Router.
 - **Documentation**: Synchronized `PROJECT_STRUCTURE.md` and `PROJECT_STATUS.md`.
 
 ---

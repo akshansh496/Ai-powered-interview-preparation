@@ -1,14 +1,14 @@
-const express=require("express")
-const authController=require("../controllers/auth.controller")
-const authMiddleware=require("../middlewares/auth.middleware")
+const express = require("express")
+const authController = require("../controllers/auth.controller")
+const authMiddleware = require("../middlewares/auth.middleware")
 
-const authRouter=express.Router()
+const authRouter = express.Router()
 /**
  * @route POST  /api/auth/register
  * @description Register a new User
  * @access Public
  */
-authRouter.post("/register",authController.registerUserController)
+authRouter.post("/register", rateLimiterMiddleware.checkRateLimit, authController.registerUserController)
 
 
 /**
@@ -17,7 +17,7 @@ authRouter.post("/register",authController.registerUserController)
  * @access Public
  */
 
-authRouter.post("/login",authController.loginUserController)
+authRouter.post("/login", rateLimiterMiddleware.checkRateLimit, authController.loginUserController)
 
 /**
  * @route GET  /api/auth/logout
@@ -25,14 +25,14 @@ authRouter.post("/login",authController.loginUserController)
  * @access Public
  */
 
-authRouter.get("/logout",authController.logoutUserController)
+authRouter.get("/logout", authController.logoutUserController)
 
 /**
  * @route GET  /api/auth/me
  * @description get current logged in user details
  * @access Private
  */
-authRouter.get("/me",authMiddleware.authUser,authController.getMeController)
+authRouter.get("/me", authMiddleware.authUser, authController.getMeController)
 
 
-module.exports=authRouter;
+module.exports = authRouter;

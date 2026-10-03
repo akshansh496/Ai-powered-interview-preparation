@@ -1,10 +1,10 @@
 /**
  * Abstract Base Class defining the contract for all AI providers.
- * Every provider (Gemini, Grok, future OpenAI, etc.) must implement this interface.
+ * Every provider (Gemini, OpenRouter, future OpenAI, etc.) must implement this interface.
  */
 class AIProvider {
     /**
-     * @param {string} name - Unique identifier of the provider (e.g. 'gemini', 'grok')
+     * @param {string} name - Unique identifier of the provider (e.g. 'gemini', 'openrouter')
      * @param {string} defaultModel - Default model name to use for this provider
      */
     constructor(name, defaultModel) {

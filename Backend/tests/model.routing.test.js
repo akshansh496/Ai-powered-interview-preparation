@@ -63,7 +63,7 @@ test("Model-Aware Routing - Unit & Resilience Test Suite", async (t) => {
             return { title: "Priority 1 Selected" }
         })
 
-        assert.equal(res.title, "Priority 1 Selected")
+        assert.equal(res.data.title, "Priority 1 Selected")
         assert.equal(selectedModelUsed, "gemini-primary", "Priority 1 model must be selected first")
     })
 
@@ -115,7 +115,7 @@ test("Model-Aware Routing - Unit & Resilience Test Suite", async (t) => {
             return { title: "Success on fallback" }
         })
 
-        assert.equal(res.title, "Success on fallback")
+        assert.equal(res.data.title, "Success on fallback")
         assert.deepEqual(attempts, ["gemini-fast", "openrouter-fast"])
         assert.equal(modelHealth.getHealth("model-a").consecutiveFailures, 1)
         assert.equal(modelHealth.getHealth("model-b").totalSuccesses, 1)
@@ -151,7 +151,7 @@ test("Model-Aware Routing - Unit & Resilience Test Suite", async (t) => {
             return { title: "m3 succeeded" }
         })
 
-        assert.equal(res.title, "m3 succeeded")
+        assert.equal(res.data.title, "m3 succeeded")
         assert.deepEqual(executionLog, ["m1", "m2", "m3"])
     })
 
@@ -286,7 +286,7 @@ test("Model-Aware Routing - Unit & Resilience Test Suite", async (t) => {
             return { title: "Rescued by openrouter/free final fallback" }
         })
 
-        assert.equal(res.title, "Rescued by openrouter/free final fallback")
+        assert.equal(res.data.title, "Rescued by openrouter/free final fallback")
         assert.deepEqual(attemptChain, [
             "gemini-primary",
             "gemini-secondary",
@@ -341,7 +341,7 @@ test("Model-Aware Routing - Unit & Resilience Test Suite", async (t) => {
             return { title: "First Model Success" }
         })
 
-        assert.equal(res.title, "First Model Success")
+        assert.equal(res.data.title, "First Model Success")
         assert.deepEqual(attempts, ["gemini-primary"])
     })
 
@@ -402,7 +402,7 @@ test("Model-Aware Routing - Unit & Resilience Test Suite", async (t) => {
         // - A marked with 1 consecutive failure
         // - B response returned
         assert.deepEqual(attempts, ["gemini-a", "openrouter-b"])
-        assert.equal(result.title, "Model B Succeeded")
+        assert.equal(result.data.title, "Model B Succeeded")
         assert.equal(modelHealth.getHealth("model-a").consecutiveFailures, 1)
         assert.equal(modelHealth.getHealth("model-b").totalSuccesses, 1)
     })

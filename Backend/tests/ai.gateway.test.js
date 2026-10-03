@@ -88,7 +88,7 @@ test("AIGateway - Dynamic Model Selection & Execution tests", async (t) => {
         for (let i = 0; i < 5; i++) modelHealth.recordSuccess("openrouter-b", 900)
 
         const result = await gateway.execute("generateInterviewReport", (p) => p.generateInterviewReport({}))
-        assert.equal(result.title, "Software Engineer")
+        assert.equal(result.data.title, "Software Engineer")
         assert.equal(gemini.callCount, 1, "Faster/higher-scoring provider should be selected")
         assert.equal(openrouter.callCount, 0)
     })
@@ -142,7 +142,7 @@ test("AIGateway - Dynamic Fallback and Resilience tests", async (t) => {
             return { title: "Backend Engineer", matchScore: 95, technicalQuestions: [], behavioralQuestions: [], skillGaps: [], preparationPlan: [] }
         })
 
-        assert.equal(result.title, "Backend Engineer")
+        assert.equal(result.data.title, "Backend Engineer")
         assert.equal(geminiAttempts, 1)
         assert.equal(openrouterAttempts, 1)
     })
