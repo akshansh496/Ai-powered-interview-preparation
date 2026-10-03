@@ -78,10 +78,6 @@ async function checkRateLimit(req, res, next) {
     }
 }
 
-// Export rate limiting for use in AI endpoints
-module.exports = {
-    checkRateLimit,
-}
 
 /**
  * In-memory sliding window rate limiter middleware for expensive AI endpoints.
@@ -156,6 +152,7 @@ function createRateLimiter(options = {}) {
 const aiEndpointRateLimiter = createRateLimiter()
 
 module.exports = {
+    checkRateLimit,
     createRateLimiter,
     aiEndpointRateLimiter
 }
