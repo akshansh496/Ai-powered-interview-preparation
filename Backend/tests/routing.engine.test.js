@@ -421,7 +421,7 @@ test("RoutingEngine — Unit Test Suite", async (t) => {
         const gateway = new AIGateway({ registry: pr, modelRegistry: mr, modelHealth: mh, routingEngine: re })
 
         const result = await gateway.execute("test-fallback", (provider, opts) => provider.generateInterviewReport({}, opts))
-        assert.equal(result.title, "Fallback Result")
+        assert.equal(result.data.title, "Fallback Result")
     })
 
     // ── 6. Custom weight configuration ────────────────────────────────────────

@@ -102,7 +102,7 @@ test("AIRouter - Routing & Execution tests", async (t) => {
         )
 
         const result = await router.route("generateInterviewReport", (p) => p.generateInterviewReport({}))
-        assert.deepEqual(result, { report: "from-gemini" })
+        assert.deepEqual(result.data, { report: "from-gemini" })
         assert.equal(mockGemini.calls, 1)
     })
 })
@@ -129,7 +129,7 @@ test("AIRouter - Fallback Mechanism tests", async (t) => {
         )
 
         const result = await router.route("generateInterviewReport", (p, opts) => p.generateInterviewReport({}, opts))
-        assert.deepEqual(result, { report: "rescued-by-openrouter" })
+        assert.deepEqual(result.data, { report: "rescued-by-openrouter" })
         assert.equal(mockGemini.calls, 1)
         assert.equal(mockOpenrouter.calls, 1)
     })

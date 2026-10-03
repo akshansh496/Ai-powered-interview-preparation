@@ -95,9 +95,9 @@ Ai Powered Interview preparation/
 │   │   │   └── user.model.js             # User accounts schema with password hashing
 │   │   ├── routes/
 │   │   │   ├── auth.routes.js            # Endpoints: /api/auth (register, login, logout, me)
-│   │   │   └── interview.routes.js       # Endpoints: /api/interview (generate, reports, pdf, star, delete)
+│   │   │   └── interview.routes.js       # Endpoints: /api/interview + /api/ai/models (model status)
 │   │   └── services/
-│   │       ├── ai.service.js             # Application boundary for AI operations & error normalization
+│   │       ├── ai.service.js             # Application boundary: auto/manual routing, returns {interviewReport, metadata}
 │   │       └── ai/
 │   │           ├── provider.interface.js # Abstract base class defining the AIProvider contract
 │   │           ├── provider.registry.js  # Centralized provider registry mapping IDs to AIProvider instances
@@ -111,6 +111,8 @@ Ai Powered Interview preparation/
 │   └── tests/
 │       ├── ai.service.test.js            # Unit tests for error normalization & key sanitization
 │       ├── ai.gateway.test.js            # Unit tests for AI Gateway model-aware routing & fallback
+│       ├── ai.model.selection.test.js    # 25 tests: AUTO/MANUAL modes, latency metadata, MODEL_UNAVAILABLE,
+│       │                                 #   MODEL_NOT_FOUND, schema preservation, security, RoutingEngine integration
 │       ├── model.routing.test.js         # Comprehensive unit & resilience test suite for model-aware routing
 │       ├── model.registry.verified.test.js # 19 tests: verified flag, eligible filtering, dynamic scoring,
 │       │                                 #   openrouter/free final fallback, 404 cascade, no-retry, key safety
@@ -175,7 +177,7 @@ Ai Powered Interview preparation/
 ### 3.1 Backend (`Backend/`)
 
 - **[server.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/server.js)**: Starts database connection and listens on `process.env.PORT || 3000`.
-- **[src/app.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/app.js)**: Configures Express middleware (2MB body payload protection, cookie parsing, dynamic CORS headers) and mounts route handlers (`/api/auth`, `/api/interview`).
+- **[src/app.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/app.js)**: Configures Express middleware (2MB body payload protection, cookie parsing, dynamic CORS headers) and mounts route handlers (`/api/auth`, `/api/interview`, `/api/ai`).
 - **[src/config/database.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/config/database.js)**: Connects to MongoDB using `process.env.MONGO_URI`.
 
 #### AI Gateway & Multi-Provider Layer (`src/services/ai/`)
@@ -199,8 +201,10 @@ Ai Powered Interview preparation/
   - Applies cold-start defaults (`successRate=0.90`, `latencyScore=0.70`) for models with fewer than `MIN_OBSERVATIONS` (3) observations to avoid penalizing fresh models.
   - `selectBestModel()` filters eligible primaries (excluding `verified:false`, `isFinalFallback`, already-attempted, and unhealthy models), scores all candidates, and returns the highest scorer with priority-based tie-breaking. `openrouter/free` is **never** scored by this engine.
 - **[ai.gateway.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai/ai.gateway.js)**:
-  - Health-Aware Multi-Model AI Gateway executing tasks with strict timeouts, abort signal propagation, and loop-protected sequential fallback.
-  - Uses `RoutingEngine.selectBestModel()` for dynamic request-time model selection across primary candidates (verified models only); only engages `openrouter/free` final fallback after all primary models are exhausted or unhealthy.
+  - Health-Aware Multi-Model AI Gateway with two execution modes:
+    - **AUTO** (`execute()`): RoutingEngine dynamically selects best healthy model with full fallback chain. Returns `{ data, metadata }`.
+    - **MANUAL** (`executeManual(requestedModel)`): Executes exactly the requested model. No silent fallback. Throws `MODEL_UNAVAILABLE` (503) or `MODEL_NOT_FOUND` (404) when ineligible.
+  - Instruments per-request lifecycle latency (`requestId`, `routingDecisionMs`, `providerRequestMs`, `totalRequestMs`).
   - Emits per-request routing score trace logs (`routingScore=[model:score(cs=bool)...]`) for full observability.
 - **[ai.router.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai/ai.router.js)**:
   - Model-aware router interface delegating execution directly to `aiGateway`.
@@ -209,14 +213,17 @@ Ai Powered Interview preparation/
 - **[openrouter.provider.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai/openrouter.provider.js)**:
   - OpenRouter API integration using OpenAI-compatible completions with native `AbortController` cancellation and multi-format `extractAndParseJson` helper supporting raw JSON, Markdown code blocks, and responses embedded in conversational text.
 - **[ai.service.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai.service.js)**:
-  - Application-level boundary for AI operations dispatching calls to `aiGateway.execute()`.
-  - Normalizes vendor errors into domain `AIError` instances.
+  - Application-level boundary. Accepts optional `requestedModel` — routes to `execute()` (AUTO) or `executeManual()` (MANUAL).
+  - Returns `{ interviewReport, metadata }` or `{ html, metadata }`. Normalizes `MODEL_UNAVAILABLE` and `MODEL_NOT_FOUND` into typed `AIError` instances without leaking internal state.
 
 #### Middlewares, Controllers, & Models
 - **[src/middlewares/rateLimiter.middleware.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/middlewares/rateLimiter.middleware.js)**:
   - In-memory sliding window rate limiter keyed by user ID or IP (`AI_REQUEST_LIMIT_PER_WINDOW`, `AI_RATE_LIMIT_WINDOW_MS`).
 - **[src/controllers/interview.controller.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/controllers/interview.controller.js)**:
   - Handles HTTP requests, calls `ai.service.js`, and maps `AIError` to clean HTTP status codes (429, 503, 504, 422, 500).
+  - Exposes `getAvailableModelsController` (GET `/api/ai/models`): returns eligible registry models with health status. No API keys or internal paths exposed.
+  - Accepts optional `requestedModel` body field on POST `/api/interview`. Returns `aiMetadata` alongside `interviewReport` in the response (existing schema unchanged).
+  - Returns `MODEL_UNAVAILABLE` (503) or `MODEL_NOT_FOUND` (404) structured JSON when manual model selection fails.
 - **[src/models/interviewReport.model.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/models/interviewReport.model.js)**:
   - Stores interview plans and match scores; indexed on `{ user: 1, isStarred: -1, createdAt: -1 }`.
 
@@ -239,9 +246,10 @@ Ai Powered Interview preparation/
 
 - **[src/main.jsx](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Frontend/src/main.jsx)** & **[src/App.jsx](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Frontend/src/App.jsx)**: Mounts React tree with Auth and Interview providers.
 - **[src/features/interview/](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Frontend/src/features/interview)**:
-  - `interview.context.jsx` & `useInterview.js`: Encapsulates generation, paginated fetching, and page state.
-  - `Home.jsx`: Dashboard displaying input form, paginated recent plans list, and empty state indicator.
-  - `Interview.jsx`: Detailed plan view with match score, accordion questions, preparation roadmap, and resume PDF download.
+  - `interview.context.jsx` & `useInterview.js`: Encapsulates generation, paginated fetching, model selection state (`selectedModelId`, `availableModels`, `modelUnavailableError`, `aiMetadata`), and `fetchAvailableModels()`.
+  - `Home.jsx`: Dashboard with input form, paginated recent plans list, **ModelSelector dropdown** (dynamic backend-driven model list), and **ModelUnavailableBanner** (structured `MODEL_UNAVAILABLE` error UX with "Switch to Auto" action).
+  - `Interview.jsx`: Detailed plan view with match score, accordion questions, preparation roadmap, resume PDF download, and **AI attribution sidebar card** (model name, provider, selectionMode badge, response time, fallback count).
+  - `interview.api.js`: Added `requestedModel` to `generateInterviewReport` FormData and `getAvailableModels()` call to `GET /api/ai/models`.
 - **[tests/interview.spec.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Frontend/tests/interview.spec.js)**: 10 Playwright E2E test scenarios covering full user flows.
 
 ---
