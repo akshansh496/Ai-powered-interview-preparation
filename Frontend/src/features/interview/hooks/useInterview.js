@@ -121,6 +121,8 @@ export const useInterview = () => {
     const getReportById = async (interviewId) => {
         setError(null)
         setLoading(true)
+        // Clear stale metadata from a previous generation so old data is never shown
+        setAiMetadata(null)
         setLoadingMessage({
             title: "Retrieving Report",
             subtitle: "Fetching your personalized preparation roadmap..."
@@ -130,6 +132,8 @@ export const useInterview = () => {
             response = await getInterviewReportById(interviewId)
             if (response && response.interviewReport) {
                 setReport(response.interviewReport)
+                // Source of truth: use the model persisted WITH this report, never the current UI selection
+                setAiMetadata(response.interviewReport.aiMetadata || null)
             } else {
                 throw new Error("Report not found.")
             }

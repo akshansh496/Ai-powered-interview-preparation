@@ -660,4 +660,12 @@
         border-radius: 9999px;
         font-weight: 600;
     }
+
+    &__unavailable {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        font-style: italic;
+        margin: 0.1rem 0 0;
+        line-height: 1.4;
+    }
 }

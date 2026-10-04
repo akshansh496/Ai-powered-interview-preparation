@@ -146,14 +146,23 @@ async function generateInterViewReportController(req, res) {
             requestedModel
         })
 
-        // Persist to DB — existing schema unchanged
+        // Persist to DB — aiMetadata stored alongside report for historical attribution
         const interviewReport = await interviewReportModel.create({
             user: req.user.id,
             resume: resumeText,
             selfDescription,
             jobDescription,
             daysUntilInterview,
-            ...aiReport
+            ...aiReport,
+            // Persist the actual generating model — source of truth for historical attribution
+            aiMetadata: {
+                model:             metadata.model,
+                modelDisplayName:  _formatModelName(metadata.model, metadata.provider),
+                provider:          _formatProviderName(metadata.provider),
+                selectionMode:     metadata.selectionMode,
+                fallbackCount:     metadata.fallbackCount,
+                totalRequestMs:    metadata.totalRequestMs
+            }
         })
 
         // Attach metadata outside the AI response object — existing consumers are unaffected
@@ -204,7 +213,9 @@ async function generateInterViewReportController(req, res) {
  */
 async function getInterviewReportByIdController(req, res) {
     const { interviewId } = req.params
-    const interviewReport = await interviewReportModel.findOne({ _id: interviewId, user: req.user.id }).lean()
+    const interviewReport = await interviewReportModel
+        .findOne({ _id: interviewId, user: req.user.id })
+        .lean()
     if (!interviewReport) {
         return res.status(401).json({ message: "Interview Report not found" })
     }
@@ -228,7 +239,8 @@ async function getAllInterviewReportsController(req, res) {
                 .sort({ isStarred: -1, createdAt: -1 })
                 .skip(skip)
                 .limit(limit)
-                .select("jobDescription matchScore isStarred createdAt")
+                // title + aiMetadata are required for card display and historical attribution
+                .select("title jobDescription matchScore isStarred createdAt aiMetadata")
                 .lean(),
             interviewReportModel.countDocuments({ user: req.user.id })
         ])
