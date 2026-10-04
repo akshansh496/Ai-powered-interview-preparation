@@ -91,7 +91,9 @@ Ai Powered Interview preparation/
 │   │   │   └── rateLimiter.middleware.js # In-memory sliding window rate limiter for expensive AI endpoints
 │   │   ├── models/
 │   │   │   ├── blacklist.model.js        # Blacklisted JWT tokens for secure logout
-│   │   │   ├── interviewReport.model.js  # Schema with compound index ({ user: 1, isStarred: -1, createdAt: -1 })
+│   │   │   ├── interviewReport.model.js  # Schema with compound index ({ user: 1, isStarred: -1, createdAt: -1 }),
+│   │   │   │                              #   aiMetadata subdocument (model, provider, selectionMode, fallbackCount,
+│   │   │   │                              #   totalRequestMs) persisted at creation time for historical attribution
 │   │   │   └── user.model.js             # User accounts schema with password hashing
 │   │   ├── routes/
 │   │   │   ├── auth.routes.js            # Endpoints: /api/auth (register, login, logout, me)
@@ -226,6 +228,8 @@ Ai Powered Interview preparation/
   - Returns `MODEL_UNAVAILABLE` (503) or `MODEL_NOT_FOUND` (404) structured JSON when manual model selection fails.
 - **[src/models/interviewReport.model.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/models/interviewReport.model.js)**:
   - Stores interview plans and match scores; indexed on `{ user: 1, isStarred: -1, createdAt: -1 }`.
+  - `aiMetadata` subdocument (`model`, `modelDisplayName`, `provider`, `selectionMode`, `fallbackCount`, `totalRequestMs`) persisted at creation time — source of truth for historical report attribution. All fields optional for backward compatibility with older reports.
+  - `getAllInterviewReports` projection now includes `title` and `aiMetadata` for report-card display and historical attribution in the list view.
 
 #### Backend Tests & Benchmarks (`tests/`, `scripts/`)
 - **[verify-ai-models.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/scripts/verify-ai-models.js)**: Model discovery and real-request verification script. Discovers all Gemini models via `@google/genai` SDK and all OpenRouter `:free` models via catalog API, then verifies each with a minimal real generation request and validates response schema conformance. Run this before updating `.env` model IDs.
