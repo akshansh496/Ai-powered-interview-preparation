@@ -6,28 +6,79 @@ import { useAuth } from "../../auth/hooks/useAuth"
 
 // ── Model Selector Sub-component ─────────────────────────────────────────────
 const ModelSelector = ({ models, selectedModelId, onSelect }) => {
-    const [open, setOpen] = useState(false)
-    const ref = useRef(null)
+    const [open, setOpen]       = useState(false)
+    const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 0 })
+    const containerRef          = useRef(null)
+    const triggerRef            = useRef(null)
 
     const selected = models.find(m => m.id === selectedModelId) || models[0]
+    const isAuto   = selectedModelId === "gateway-auto" || !selectedModelId
 
+    // Compute dropdown position from trigger bounding rect (for fixed positioning)
+    const computePos = () => {
+        if (!triggerRef.current) return
+        const rect = triggerRef.current.getBoundingClientRect()
+        setDropPos({
+            top:   rect.bottom + 6,
+            left:  rect.left,
+            width: Math.max(rect.width, 280)
+        })
+    }
+
+    const handleToggle = () => {
+        if (!open) computePos()
+        setOpen(o => !o)
+    }
+
+    // Close on outside click — check both the trigger container and the fixed portal
     useEffect(() => {
+        if (!open) return
         const handler = (e) => {
-            if (ref.current && !ref.current.contains(e.target)) setOpen(false)
+            if (containerRef.current && containerRef.current.contains(e.target)) return
+            if (e.target.closest('[data-model-dropdown]')) return
+            setOpen(false)
         }
         document.addEventListener("mousedown", handler)
         return () => document.removeEventListener("mousedown", handler)
-    }, [])
+    }, [open])
+
+    // Keep dropdown anchored to trigger on scroll/resize
+    useEffect(() => {
+        if (!open) return
+        const update = () => computePos()
+        window.addEventListener("scroll", update, { passive: true, capture: true })
+        window.addEventListener("resize", update, { passive: true })
+        return () => {
+            window.removeEventListener("scroll", update, { capture: true })
+            window.removeEventListener("resize", update)
+        }
+    }, [open])
 
     if (!models || models.length === 0) return null
 
-    const isAuto = selectedModelId === "gateway-auto" || !selectedModelId
+    // Inline styles so the fixed dropdown escapes any overflow:hidden ancestor
+    const dropdownStyle = {
+        position:     "fixed",
+        top:          dropPos.top,
+        left:         dropPos.left,
+        minWidth:     dropPos.width,
+        zIndex:       9999,
+        maxHeight:    "min(320px, 60vh)",
+        overflowY:    "auto",
+        overflowX:    "hidden",
+        background:   "#FFFFFF",
+        border:       "1.5px solid #E5E3DC",
+        borderRadius: "10px",
+        boxShadow:    "0 8px 24px rgba(15,23,42,0.10), 0 2px 6px rgba(15,23,42,0.06)",
+        padding:      "0.35rem",
+    }
 
     return (
-        <div className='model-selector' ref={ref}>
+        <div className='model-selector' ref={containerRef}>
             <div
+                ref={triggerRef}
                 className={`model-selector__trigger ${open ? 'model-selector__trigger--open' : ''}`}
-                onClick={() => setOpen(o => !o)}
+                onClick={handleToggle}
                 role="button"
                 aria-haspopup="listbox"
                 aria-expanded={open}
@@ -50,7 +101,7 @@ const ModelSelector = ({ models, selectedModelId, onSelect }) => {
             </div>
 
             {open && (
-                <div className='model-selector__dropdown' role="listbox">
+                <div style={dropdownStyle} role="listbox" data-model-dropdown="true">
                     {models.map(model => (
                         <div
                             key={model.id}
