@@ -4,7 +4,7 @@ const { zodToJsonSchema } = require("zod-to-json-schema")
 const { AIProvider } = require("./provider.interface")
 
 // Configuration constants with environment variable overrides
-const DEFAULT_MODEL = process.env.GEMINI_MODEL || "gemini-3-flash-preview"
+const DEFAULT_MODEL = process.env.GEMINI_MODEL || "gemini-3-pro-preview"
 const MAX_RETRIES = parseInt(process.env.AI_MAX_RETRIES, 10) || 0
 const TIMEOUT_MS = parseInt(process.env.AI_PROVIDER_TIMEOUT_MS, 10) || parseInt(process.env.AI_REQUEST_TIMEOUT_MS, 10) || 8000
 

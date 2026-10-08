@@ -1,19 +1,18 @@
 "use strict"
 const aiGateway = require("./ai/ai.gateway")
-const aiRouter  = require("./ai/ai.router")
-
+const aiRouter = require("./ai/ai.router")
 /**
  * Custom error class representing normalized AI service errors.
  */
 class AIError extends Error {
     constructor(message, { code = "AI_GENERIC_ERROR", statusCode = 500, isTransient = false, details = null, model = null } = {}) {
         super(message)
-        this.name       = "AIError"
-        this.code       = code
+        this.name = "AIError"
+        this.code = code
         this.statusCode = statusCode
         this.isTransient = isTransient
-        this.details    = details
-        this.model      = model  // Set for MODEL_UNAVAILABLE / MODEL_NOT_FOUND
+        this.details = details
+        this.model = model  // Set for MODEL_UNAVAILABLE / MODEL_NOT_FOUND
     }
 }
 
@@ -25,25 +24,25 @@ function normalizeAIError(error) {
     if (error instanceof AIError) return error
 
     const message = (error && error.message) || ""
-    const lower   = message.toLowerCase()
-    const code    = error && error.code
-    const status  = error && (error.status || error.statusCode || (error.response && error.response.status))
+    const lower = message.toLowerCase()
+    const code = error && error.code
+    const status = error && (error.status || error.statusCode || (error.response && error.response.status))
 
     // 0. MODEL_UNAVAILABLE / MODEL_NOT_FOUND — already clean, surface directly
     if (code === "MODEL_UNAVAILABLE") {
         return new AIError(error.message || "The selected model is currently unavailable.", {
-            code:       "MODEL_UNAVAILABLE",
+            code: "MODEL_UNAVAILABLE",
             statusCode: 503,
             isTransient: true,
-            model:      error.model || null
+            model: error.model || null
         })
     }
     if (code === "MODEL_NOT_FOUND") {
         return new AIError(error.message || "The requested model is not available.", {
-            code:       "MODEL_NOT_FOUND",
+            code: "MODEL_NOT_FOUND",
             statusCode: 404,
             isTransient: false,
-            model:      error.model || null
+            model: error.model || null
         })
     }
 
@@ -122,7 +121,7 @@ async function generateInterviewReport({ resume, selfDescription, jobDescription
         // aiResult = { data, metadata }
         return {
             interviewReport: aiResult.data,
-            metadata:        aiResult.metadata
+            metadata: aiResult.metadata
         }
     } catch (error) {
         console.error("AI Service - generateInterviewReport failed:", error.message)
@@ -153,7 +152,7 @@ async function generateResumePdf({ resume, selfDescription, jobDescription, requ
         }
 
         return {
-            html:     aiResult.data,
+            html: aiResult.data,
             metadata: aiResult.metadata
         }
     } catch (error) {
