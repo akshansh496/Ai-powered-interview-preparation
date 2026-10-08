@@ -1,4 +1,4 @@
-const mongoose=require('mongoose');
+const mongoose = require('mongoose');
 
 /**
  * -job description text:String
@@ -133,8 +133,21 @@ const interviewReportSchema=new mongoose.Schema({
     isStarred:{
         type:Boolean,
         default:false
+    },
+    /**
+     * Persisted metadata about the AI model that actually generated this report.
+     * This is the source of truth for historical report attribution.
+     * All fields are optional for backward compatibility with older reports.
+     */
+    aiMetadata: {
+        model:          { type: String },
+        modelDisplayName: { type: String },
+        provider:       { type: String },
+        selectionMode:  { type: String, enum: ["auto", "manual"] },
+        fallbackCount:  { type: Number, default: 0 },
+        totalRequestMs: { type: Number }
     }
-},{
+},{ 
     timestamps:true
 })
 

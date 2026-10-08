@@ -75,26 +75,24 @@ All frontend styling and layout across InterviewAI have been redesigned to adopt
 
 ## 4. Verification Results
 
-### Backend Automated Tests (77 passing)
-Executed via native Node test runner (`node --test src/tests/**/*.test.js`):
+### Backend Automated Tests (69 passing)
+Executed via native Node test runner (`npm test`):
 ```text
 ✔ AIRouter - Provider Registration & Registry tests (3 tests)
 ✔ AIRouter - Routing & Execution tests (1 test)
 ✔ AIRouter - Fallback Mechanism tests (4 tests)
 ✔ AI Service - normalizeAIError tests (7 tests)
-✔ GrokProvider - Configuration and Availability tests (2 tests)
-✔ GrokProvider - API Execution and Structured Output tests (3 tests)
 ✔ OpenRouterProvider - extractAndParseJson helper unit tests (5 tests)
 ✔ OpenRouterProvider - Configuration and Availability tests (2 tests)
 ✔ OpenRouterProvider - API Execution, Schema Validation, and Retry tests (8 tests)
-✔ AIProvider Interface tests (4 tests)
+✔ AIProvider Interface tests (3 tests)
 ✔ ProviderRegistry tests (4 tests)
 ✔ Rate Limiter Middleware tests (3 tests)
 ✔ RoutingEngine - Suitability Scoring & Health Tracking tests (5 tests)
 ✔ RoutingEngine - Candidate Evaluation & Filtering tests (3 tests)
 
-ℹ tests 77
-ℹ pass 77
+ℹ tests 69
+ℹ pass 69
 ℹ fail 0
 ```
 

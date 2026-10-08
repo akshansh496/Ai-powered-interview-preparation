@@ -1,6 +1,5 @@
 const { AIProvider } = require("./provider.interface")
 const geminiProvider = require("./gemini.provider")
-const grokProvider = require("./grok.provider")
 const openrouterProvider = require("./openrouter.provider")
 
 /**
@@ -11,13 +10,12 @@ class ProviderRegistry {
         this.providers = new Map()
         // Register default supported providers
         this.registerProvider("gemini", geminiProvider)
-        this.registerProvider("grok", grokProvider)
         this.registerProvider("openrouter", openrouterProvider)
     }
 
     /**
      * Registers a new or mock provider into the central registry.
-     * @param {string} name - Provider identifier (e.g. 'gemini', 'grok', 'openai')
+     * @param {string} name - Provider identifier (e.g. 'gemini', 'openrouter', 'openai')
      * @param {AIProvider} provider - Instance conforming to AIProvider contract
      */
     registerProvider(name, provider) {

@@ -2,8 +2,8 @@ const { AIProvider } = require("./provider.interface")
 const { interviewReportSchema, resumePdfSchema, isTransientError } = require("./gemini.provider")
 
 const DEFAULT_MODEL = process.env.OPENROUTER_MODEL || "openrouter/free"
-const MAX_RETRIES = parseInt(process.env.AI_MAX_RETRIES, 10) || 2
-const TIMEOUT_MS = parseInt(process.env.AI_REQUEST_TIMEOUT_MS, 10) || 60000
+const MAX_RETRIES = parseInt(process.env.AI_MAX_RETRIES, 10) || 0
+const TIMEOUT_MS = parseInt(process.env.AI_PROVIDER_TIMEOUT_MS, 10) || parseInt(process.env.AI_REQUEST_TIMEOUT_MS, 10) || 8000
 const OPENROUTER_API_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 
 /**
@@ -62,32 +62,13 @@ function extractAndParseJson(content, contextName = "response") {
 }
 
 /**
- * Executes a function with a timeout using Promise.race.
- */
-function withTimeout(promise, timeoutMs) {
-    let timer
-    const timeoutPromise = new Promise((_, reject) => {
-        timer = setTimeout(() => {
-            const timeoutError = new Error(`AI request to OpenRouter timed out after ${timeoutMs}ms.`)
-            timeoutError.code = "REQUEST_TIMEOUT"
-            reject(timeoutError)
-        }, timeoutMs)
-    })
-
-    return Promise.race([
-        promise.finally(() => clearTimeout(timer)),
-        timeoutPromise
-    ])
-}
-
-/**
  * Small bounded retry mechanism with exponential backoff & jitter.
  */
 async function executeWithRetry(fn, maxRetries = MAX_RETRIES, timeoutMs = TIMEOUT_MS) {
     let lastError
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
-            return await withTimeout(fn(), timeoutMs)
+            return await fn(timeoutMs)
         } catch (error) {
             lastError = error
             const canRetry = attempt < maxRetries && isTransientError(error)
@@ -130,6 +111,8 @@ class OpenRouterProvider extends AIProvider {
     async generateInterviewReport({ resume, selfDescription, jobDescription, daysUntilInterview }, options = {}) {
         const apiKey = this.getApiKey()
         const modelToUse = options.model || this.model
+        const timeoutMs = options.timeoutMs || parseInt(process.env.AI_PROVIDER_TIMEOUT_MS, 10) || TIMEOUT_MS
+        const maxRetries = options.maxRetries !== undefined ? options.maxRetries : MAX_RETRIES
 
         const timingInstruction = daysUntilInterview
             ? `The candidate has exactly ${daysUntilInterview} day(s) until their actual interview. The preparationPlan array MUST contain exactly ${daysUntilInterview} entries (one per day, day 1 through day ${daysUntilInterview}), with the workload and topic depth per day scaled realistically to fit that timeframe. If the timeframe is very short (1-2 days), prioritize only the highest-impact topics and skip lower-priority skill gaps rather than cramming everything in.`
@@ -162,63 +145,80 @@ Job Description: ${jobDescription}
 
 ${timingInstruction}`
 
-        const executeCall = async () => {
-            const response = await this.fetchFn(this.apiEndpoint, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${apiKey}`,
-                    "HTTP-Referer": "http://localhost:3000",
-                    "X-Title": "InterviewAI"
-                },
-                body: JSON.stringify({
-                    model: modelToUse,
-                    messages: [
-                        { role: "system", content: systemMessage },
-                        { role: "user", content: userMessage }
-                    ],
-                    response_format: { type: "json_object" },
-                    temperature: 0.2
+        const executeCall = async (currentTimeoutMs) => {
+            const controller = new AbortController()
+            const timer = setTimeout(() => controller.abort(), currentTimeoutMs)
+
+            try {
+                const response = await this.fetchFn(this.apiEndpoint, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${apiKey}`,
+                        "HTTP-Referer": "http://localhost:3000",
+                        "X-Title": "InterviewAI"
+                    },
+                    body: JSON.stringify({
+                        model: modelToUse,
+                        messages: [
+                            { role: "system", content: systemMessage },
+                            { role: "user", content: userMessage }
+                        ],
+                        response_format: { type: "json_object" },
+                        temperature: 0.2
+                    }),
+                    signal: controller.signal
                 })
-            })
+                clearTimeout(timer)
 
-            if (!response.ok) {
-                let errorBody = ""
-                try {
-                    errorBody = await response.text()
-                } catch (_) {}
+                if (!response.ok) {
+                    let errorBody = ""
+                    try {
+                        errorBody = await response.text()
+                    } catch (_) {}
 
-                const err = new Error(`OpenRouter API error: HTTP ${response.status} - ${errorBody}`)
-                err.status = response.status
-                err.statusCode = response.status
+                    const err = new Error(`OpenRouter API error: HTTP ${response.status} - ${errorBody}`)
+                    err.status = response.status
+                    err.statusCode = response.status
+                    throw err
+                }
+
+                const data = await response.json()
+                if (data?.model) {
+                    this.lastActualModel = data.model
+                }
+
+                const content = data?.choices?.[0]?.message?.content
+                const parsed = extractAndParseJson(content, "interview report response")
+
+                const validationResult = interviewReportSchema.safeParse(parsed)
+                if (!validationResult.success) {
+                    const err = new Error("OpenRouter AI response did not conform to the expected schema.")
+                    err.code = "VALIDATION_ERROR"
+                    err.details = validationResult.error.issues
+                    throw err
+                }
+
+                return validationResult.data
+            } catch (err) {
+                clearTimeout(timer)
+                if (err.name === "AbortError" || controller.signal.aborted) {
+                    const timeoutErr = new Error(`AI request to OpenRouter model '${modelToUse}' timed out after ${currentTimeoutMs}ms.`)
+                    timeoutErr.code = "REQUEST_TIMEOUT"
+                    throw timeoutErr
+                }
                 throw err
             }
-
-            const data = await response.json()
-            if (data?.model) {
-                this.lastActualModel = data.model
-            }
-
-            const content = data?.choices?.[0]?.message?.content
-            const parsed = extractAndParseJson(content, "interview report response")
-
-            const validationResult = interviewReportSchema.safeParse(parsed)
-            if (!validationResult.success) {
-                const err = new Error("OpenRouter AI response did not conform to the expected schema.")
-                err.code = "VALIDATION_ERROR"
-                err.details = validationResult.error.issues
-                throw err
-            }
-
-            return validationResult.data
         }
 
-        return await executeWithRetry(executeCall)
+        return await executeWithRetry(executeCall, maxRetries, timeoutMs)
     }
 
     async generateResumePdf({ resume, selfDescription, jobDescription }, options = {}) {
         const apiKey = this.getApiKey()
         const modelToUse = options.model || this.model
+        const timeoutMs = options.timeoutMs || parseInt(process.env.AI_PROVIDER_TIMEOUT_MS, 10) || TIMEOUT_MS
+        const maxRetries = options.maxRetries !== undefined ? options.maxRetries : MAX_RETRIES
 
         const systemMessage = `You are an expert resume writer.
 Generate an ATS-friendly tailored resume in HTML format.
@@ -234,58 +234,73 @@ Job Description: ${jobDescription}
 The resume should be tailored for the given job description and should highlight the candidate's strengths and relevant experience.
 The content should be ATS friendly, simple, and professional. 1-2 pages long when converted to PDF.`
 
-        const executeCall = async () => {
-            const response = await this.fetchFn(this.apiEndpoint, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${apiKey}`,
-                    "HTTP-Referer": "http://localhost:3000",
-                    "X-Title": "InterviewAI"
-                },
-                body: JSON.stringify({
-                    model: modelToUse,
-                    messages: [
-                        { role: "system", content: systemMessage },
-                        { role: "user", content: userMessage }
-                    ],
-                    response_format: { type: "json_object" },
-                    temperature: 0.2
+        const executeCall = async (currentTimeoutMs) => {
+            const controller = new AbortController()
+            const timer = setTimeout(() => controller.abort(), currentTimeoutMs)
+
+            try {
+                const response = await this.fetchFn(this.apiEndpoint, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${apiKey}`,
+                        "HTTP-Referer": "http://localhost:3000",
+                        "X-Title": "InterviewAI"
+                    },
+                    body: JSON.stringify({
+                        model: modelToUse,
+                        messages: [
+                            { role: "system", content: systemMessage },
+                            { role: "user", content: userMessage }
+                        ],
+                        response_format: { type: "json_object" },
+                        temperature: 0.2
+                    }),
+                    signal: controller.signal
                 })
-            })
+                clearTimeout(timer)
 
-            if (!response.ok) {
-                let errorBody = ""
-                try {
-                    errorBody = await response.text()
-                } catch (_) {}
+                if (!response.ok) {
+                    let errorBody = ""
+                    try {
+                        errorBody = await response.text()
+                    } catch (_) {}
 
-                const err = new Error(`OpenRouter API error: HTTP ${response.status} - ${errorBody}`)
-                err.status = response.status
-                err.statusCode = response.status
+                    const err = new Error(`OpenRouter API error: HTTP ${response.status} - ${errorBody}`)
+                    err.status = response.status
+                    err.statusCode = response.status
+                    throw err
+                }
+
+                const data = await response.json()
+                if (data?.model) {
+                    this.lastActualModel = data.model
+                }
+
+                const content = data?.choices?.[0]?.message?.content
+                const parsed = extractAndParseJson(content, "resume response")
+
+                const validationResult = resumePdfSchema.safeParse(parsed)
+                if (!validationResult.success) {
+                    const err = new Error("OpenRouter AI resume response did not conform to the expected schema.")
+                    err.code = "VALIDATION_ERROR"
+                    err.details = validationResult.error.issues
+                    throw err
+                }
+
+                return validationResult.data.html
+            } catch (err) {
+                clearTimeout(timer)
+                if (err.name === "AbortError" || controller.signal.aborted) {
+                    const timeoutErr = new Error(`AI request to OpenRouter model '${modelToUse}' timed out after ${currentTimeoutMs}ms.`)
+                    timeoutErr.code = "REQUEST_TIMEOUT"
+                    throw timeoutErr
+                }
                 throw err
             }
-
-            const data = await response.json()
-            if (data?.model) {
-                this.lastActualModel = data.model
-            }
-
-            const content = data?.choices?.[0]?.message?.content
-            const parsed = extractAndParseJson(content, "resume response")
-
-            const validationResult = resumePdfSchema.safeParse(parsed)
-            if (!validationResult.success) {
-                const err = new Error("OpenRouter AI resume response did not conform to the expected schema.")
-                err.code = "VALIDATION_ERROR"
-                err.details = validationResult.error.issues
-                throw err
-            }
-
-            return validationResult.data.html
         }
 
-        return await executeWithRetry(executeCall)
+        return await executeWithRetry(executeCall, maxRetries, timeoutMs)
     }
 }
 

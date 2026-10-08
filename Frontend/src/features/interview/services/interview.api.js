@@ -18,8 +18,9 @@ api.interceptors.request.use((config) => {
 
 /**
  * @description Service to generate interview report based on user self description, resume and job description.
+ * @param {string|null} requestedModel - null/"auto"/"gateway-auto" for dynamic routing; model id string for manual
  */
-export const generateInterviewReport = async ({ jobDescription, selfDescription, resumeFile, daysUntilInterview }) => {
+export const generateInterviewReport = async ({ jobDescription, selfDescription, resumeFile, daysUntilInterview, requestedModel }) => {
 
     const formData = new FormData()
     formData.append("jobDescription", jobDescription)
@@ -27,6 +28,10 @@ export const generateInterviewReport = async ({ jobDescription, selfDescription,
     formData.append("resume", resumeFile)
     if (daysUntilInterview !== undefined && daysUntilInterview !== null && daysUntilInterview !== "") {
         formData.append("daysUntilInterview", daysUntilInterview)
+    }
+    // Manual model override — omit/null means Auto mode
+    if (requestedModel && requestedModel !== "auto" && requestedModel !== "gateway-auto") {
+        formData.append("requestedModel", requestedModel)
     }
 
     const response = await api.post("/api/interview/", formData, {
@@ -38,6 +43,17 @@ export const generateInterviewReport = async ({ jobDescription, selfDescription,
     return response.data
 
 }
+
+
+/**
+ * @description Fetch available AI models from the backend model registry.
+ * Returns { models: [{ id, name, provider, available, healthy }] }
+ */
+export const getAvailableModels = async () => {
+    const response = await api.get("/api/ai/models")
+    return response.data
+}
+
 
 
 /**

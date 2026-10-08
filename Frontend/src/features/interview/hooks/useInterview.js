@@ -1,4 +1,12 @@
-import { getAllInterviewReports, generateInterviewReport, getInterviewReportById, generateResumePdf, deleteInterviewReport, toggleStarInterviewReport } from "../services/interview.api"
+import {
+    getAllInterviewReports,
+    generateInterviewReport,
+    getInterviewReportById,
+    generateResumePdf,
+    deleteInterviewReport,
+    toggleStarInterviewReport,
+    getAvailableModels
+} from "../services/interview.api"
 import { useContext } from "react"
 import { InterviewContext } from "../interview.context"
 
@@ -10,39 +18,97 @@ export const useInterview = () => {
         throw new Error("useInterview must be used within an InterviewProvider")
     }
 
-    const { 
-        loading, 
-        setLoading, 
-        loadingMessage, 
-        setLoadingMessage, 
-        error, 
-        setError, 
-        report, 
-        setReport, 
-        reports, 
+    const {
+        loading,
+        setLoading,
+        loadingMessage,
+        setLoadingMessage,
+        error,
+        setError,
+        report,
+        setReport,
+        reports,
         setReports,
         pagination,
-        setPagination
+        setPagination,
+        // Model selection
+        selectedModelId,
+        setSelectedModelId,
+        availableModels,
+        setAvailableModels,
+        modelUnavailableError,
+        setModelUnavailableError,
+        aiMetadata,
+        setAiMetadata
     } = context
 
+    /**
+     * Fetches the list of available models from the backend.
+     * Should be called once when the home page mounts.
+     */
+    const fetchAvailableModels = async () => {
+        try {
+            const data = await getAvailableModels()
+            if (data && data.models) {
+                setAvailableModels(data.models)
+            }
+        } catch (err) {
+            // Non-critical — model selector falls back to just Auto if this fails
+            console.warn("Could not fetch model list:", err.message)
+            setAvailableModels([{ id: "gateway-auto", name: "Auto — Let Gateway Decide", provider: null, available: true, healthy: true }])
+        }
+    }
+
+    /**
+     * Generates an interview report.
+     * selectedModelId from context is passed as requestedModel.
+     * Handles MODEL_UNAVAILABLE by surfacing a structured error (not a generic setError).
+     */
     const generateReport = async ({ jobDescription, selfDescription, resumeFile, daysUntilInterview }) => {
         setError(null)
+        setModelUnavailableError(null)
         setLoading(true)
+        setAiMetadata(null)
         setLoadingMessage({
             title: "Generating Strategy",
             subtitle: "Analyzing job description and preparing your custom questions..."
         })
+
+        const requestedModel = (selectedModelId && selectedModelId !== "gateway-auto") ? selectedModelId : null
         let response = null
+
         try {
-            response = await generateInterviewReport({ jobDescription, selfDescription, resumeFile, daysUntilInterview })
+            response = await generateInterviewReport({
+                jobDescription,
+                selfDescription,
+                resumeFile,
+                daysUntilInterview,
+                requestedModel
+            })
+
             if (response && response.interviewReport) {
                 setReport(response.interviewReport)
+                if (response.aiMetadata) {
+                    setAiMetadata(response.aiMetadata)
+                }
             } else {
                 throw new Error("Empty report response from server.")
             }
         } catch (err) {
             console.error(err)
-            const errMsg = err.response?.data?.message || err.message || "Failed to generate interview strategy."
+            const errData = err.response?.data
+
+            // MODEL_UNAVAILABLE — structured UX error (not a generic page error)
+            if (errData?.code === "MODEL_UNAVAILABLE" || errData?.code === "MODEL_NOT_FOUND") {
+                setModelUnavailableError({
+                    code:    errData.code,
+                    message: errData.message,
+                    model:   errData.model || requestedModel
+                })
+                throw err  // rethrow so caller can bail
+            }
+
+            const errMsg = errData?.message || err.message || "Failed to generate interview strategy."
             setError(errMsg)
             throw err
         } finally {
@@ -55,6 +121,8 @@ export const useInterview = () => {
     const getReportById = async (interviewId) => {
         setError(null)
         setLoading(true)
+        // Clear stale metadata from a previous generation so old data is never shown
+        setAiMetadata(null)
         setLoadingMessage({
             title: "Retrieving Report",
             subtitle: "Fetching your personalized preparation roadmap..."
@@ -64,6 +132,8 @@ export const useInterview = () => {
             response = await getInterviewReportById(interviewId)
             if (response && response.interviewReport) {
                 setReport(response.interviewReport)
+                // Source of truth: use the model persisted WITH this report, never the current UI selection
+                setAiMetadata(response.interviewReport.aiMetadata || null)
             } else {
                 throw new Error("Report not found.")
             }
@@ -187,21 +257,29 @@ export const useInterview = () => {
         }
     }
 
-    return { 
-        loading, 
-        loadingMessage, 
-        error, 
-        setError, 
-        report, 
-        reports, 
+    return {
+        loading,
+        loadingMessage,
+        error,
+        setError,
+        report,
+        reports,
         pagination,
         changePage,
-        generateReport, 
-        getReportById, 
-        getReports, 
+        generateReport,
+        getReportById,
+        getReports,
         getResumePdf,
         deleteReport,
-        toggleStar
+        toggleStar,
+        // Model selection
+        selectedModelId,
+        setSelectedModelId,
+        availableModels,
+        fetchAvailableModels,
+        modelUnavailableError,
+        setModelUnavailableError,
+        aiMetadata
     }
 
 }

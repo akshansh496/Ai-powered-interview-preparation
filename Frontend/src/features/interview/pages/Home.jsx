@@ -4,30 +4,195 @@ import { useInterview } from '../hooks/useInterview.js'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from "../../auth/hooks/useAuth"
 
+// ── Model Selector Sub-component ─────────────────────────────────────────────
+const ModelSelector = ({ models, selectedModelId, onSelect }) => {
+    const [open, setOpen]       = useState(false)
+    const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 0 })
+    const containerRef          = useRef(null)
+    const triggerRef            = useRef(null)
+
+    const selected = models.find(m => m.id === selectedModelId) || models[0]
+    const isAuto   = selectedModelId === "gateway-auto" || !selectedModelId
+
+    // Compute dropdown position from trigger bounding rect (for fixed positioning)
+    const computePos = () => {
+        if (!triggerRef.current) return
+        const rect = triggerRef.current.getBoundingClientRect()
+        setDropPos({
+            top:   rect.bottom + 6,
+            left:  rect.left,
+            width: Math.max(rect.width, 280)
+        })
+    }
+
+    const handleToggle = () => {
+        if (!open) computePos()
+        setOpen(o => !o)
+    }
+
+    // Close on outside click — check both the trigger container and the fixed portal
+    useEffect(() => {
+        if (!open) return
+        const handler = (e) => {
+            if (containerRef.current && containerRef.current.contains(e.target)) return
+            if (e.target.closest('[data-model-dropdown]')) return
+            setOpen(false)
+        }
+        document.addEventListener("mousedown", handler)
+        return () => document.removeEventListener("mousedown", handler)
+    }, [open])
+
+    // Keep dropdown anchored to trigger on scroll/resize
+    useEffect(() => {
+        if (!open) return
+        const update = () => computePos()
+        window.addEventListener("scroll", update, { passive: true, capture: true })
+        window.addEventListener("resize", update, { passive: true })
+        return () => {
+            window.removeEventListener("scroll", update, { capture: true })
+            window.removeEventListener("resize", update)
+        }
+    }, [open])
+
+    if (!models || models.length === 0) return null
+
+    // Inline styles so the fixed dropdown escapes any overflow:hidden ancestor
+    const dropdownStyle = {
+        position:     "fixed",
+        top:          dropPos.top,
+        left:         dropPos.left,
+        minWidth:     dropPos.width,
+        zIndex:       9999,
+        maxHeight:    "min(320px, 60vh)",
+        overflowY:    "auto",
+        overflowX:    "hidden",
+        background:   "#FFFFFF",
+        border:       "1.5px solid #E5E3DC",
+        borderRadius: "10px",
+        boxShadow:    "0 8px 24px rgba(15,23,42,0.10), 0 2px 6px rgba(15,23,42,0.06)",
+        padding:      "0.35rem",
+    }
+
+    return (
+        <div className='model-selector' ref={containerRef}>
+            <div
+                ref={triggerRef}
+                className={`model-selector__trigger ${open ? 'model-selector__trigger--open' : ''}`}
+                onClick={handleToggle}
+                role="button"
+                aria-haspopup="listbox"
+                aria-expanded={open}
+                id="model-selector-trigger"
+            >
+                <span className='model-selector__icon'>
+                    {isAuto ? (
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+                    ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                    )}
+                </span>
+                <span className='model-selector__label'>{selected?.name || "Auto — Let Gateway Decide"}</span>
+                {selected && !isAuto && (
+                    <span className={`model-selector__status ${selected.healthy ? 'available' : 'unavailable'}`}>
+                        {selected.healthy ? '✓' : '⚠'}
+                    </span>
+                )}
+                <svg className='model-selector__chevron' xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+
+            {open && (
+                <div style={dropdownStyle} role="listbox" data-model-dropdown="true">
+                    {models.map(model => (
+                        <div
+                            key={model.id}
+                            className={`model-selector__option ${model.id === selectedModelId ? 'model-selector__option--selected' : ''} ${!model.healthy ? 'model-selector__option--unhealthy' : ''}`}
+                            onClick={() => { onSelect(model.id); setOpen(false) }}
+                            role="option"
+                            aria-selected={model.id === selectedModelId}
+                        >
+                            <div className='model-selector__option-info'>
+                                <span className='model-selector__option-name'>{model.name}</span>
+                                {model.provider && (
+                                    <span className='model-selector__option-provider'>{model.provider}</span>
+                                )}
+                            </div>
+                            <div className='model-selector__option-right'>
+                                {!model.healthy && (
+                                    <span className='model-selector__option-badge unavailable'>Unavailable</span>
+                                )}
+                                {model.id === selectedModelId && (
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            <p className='model-selector__hint'>
+                {isAuto
+                    ? "The Gateway automatically selects the best available model based on real-time health, latency and reliability."
+                    : "Using selected model directly. Gateway fallback is disabled in manual mode."}
+            </p>
+        </div>
+    )
+}
+
+// ── MODEL_UNAVAILABLE Error Banner ────────────────────────────────────────────
+const ModelUnavailableBanner = ({ error, onChooseAnother, onSwitchToAuto }) => (
+    <div className='model-unavailable-banner'>
+        <div className='model-unavailable-banner__icon'>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </div>
+        <div className='model-unavailable-banner__body'>
+            <p className='model-unavailable-banner__title'>Model Unavailable</p>
+            <p className='model-unavailable-banner__message'>{error.message}</p>
+            <p className='model-unavailable-banner__sub'>Please choose another model or let the Gateway automatically select an available model.</p>
+        </div>
+        <div className='model-unavailable-banner__actions'>
+            <button className='banner-btn banner-btn--secondary' onClick={onChooseAnother}>
+                Choose another model
+            </button>
+            <button className='banner-btn banner-btn--primary' onClick={onSwitchToAuto}>
+                Switch to Auto
+            </button>
+        </div>
+    </div>
+)
+
+// ── Main Home Component ───────────────────────────────────────────────────────
 const Home = () => {
 
-    const { loading, loadingMessage, error, setError, generateReport, getReports, reports, pagination, changePage, deleteReport, toggleStar } = useInterview()
+    const {
+        loading, loadingMessage, error, setError,
+        generateReport, getReports, reports, pagination, changePage, deleteReport, toggleStar,
+        selectedModelId, setSelectedModelId,
+        availableModels, fetchAvailableModels,
+        modelUnavailableError, setModelUnavailableError,
+        aiMetadata
+    } = useInterview()
     const { user, handleLogout } = useAuth()
-    const [ jobDescription, setJobDescription ] = useState("")
-    const [ selfDescription, setSelfDescription ] = useState("")
-    const [ daysUntilInterview, setDaysUntilInterview ] = useState("")
-    const [ selectedFile, setSelectedFile ] = useState(null)
+    const [jobDescription, setJobDescription]     = useState("")
+    const [selfDescription, setSelfDescription]   = useState("")
+    const [daysUntilInterview, setDaysUntilInterview] = useState("")
+    const [selectedFile, setSelectedFile]         = useState(null)
     const resumeInputRef = useRef()
 
     const navigate = useNavigate()
 
     useEffect(() => {
         getReports()
+        fetchAvailableModels()
     }, [])
 
     const handleGenerateReport = async () => {
         if (!selectedFile && !selfDescription.trim()) {
-            setError("A resume file or a quick self-description is required to generate a personalized plan.");
-            return;
+            setError("A resume file or a quick self-description is required to generate a personalized plan.")
+            return
         }
         if (!jobDescription.trim()) {
-            setError("Job description is required.");
-            return;
+            setError("Job description is required.")
+            return
         }
         const resumeFile = selectedFile
         try {
@@ -36,21 +201,22 @@ const Home = () => {
                 navigate(`/interview/${data._id}`)
             }
         } catch (err) {
-            console.error("Report generation failed:", err)
+            // MODEL_UNAVAILABLE is handled by modelUnavailableError — no generic error set
+            console.error("Report generation failed:", err.code || err.message)
         }
     }
 
     const handleDelete = (e, id) => {
-        e.stopPropagation();
+        e.stopPropagation()
         if (confirm("Are you sure you want to delete this interview plan?")) {
-            deleteReport(id);
+            deleteReport(id)
         }
-    };
+    }
 
     const handleStarToggle = (e, id, isStarred) => {
-        e.stopPropagation();
-        toggleStar(id, isStarred);
-    };
+        e.stopPropagation()
+        toggleStar(id, isStarred)
+    }
 
     const handleRemoveFile = (e) => {
         e.preventDefault()
@@ -130,6 +296,18 @@ const Home = () => {
                 <h1>Create Your Custom <span className='highlight'>Interview Plan</span></h1>
                 <p>Let our AI analyze the job requirements and your unique profile to build a winning strategy.</p>
             </header>
+
+            {/* MODEL_UNAVAILABLE banner */}
+            {modelUnavailableError && (
+                <ModelUnavailableBanner
+                    error={modelUnavailableError}
+                    onChooseAnother={() => setModelUnavailableError(null)}
+                    onSwitchToAuto={() => {
+                        setSelectedModelId("gateway-auto")
+                        setModelUnavailableError(null)
+                    }}
+                />
+            )}
 
             {/* Main Card */}
             <div className='interview-card'>
@@ -245,12 +423,29 @@ const Home = () => {
                     </div>
                 </div>
 
+                {/* AI Model Selector */}
+                <div className='interview-card__model-selector'>
+                    <div className='model-selector-label'>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                        AI Model
+                    </div>
+                    <ModelSelector
+                        models={availableModels.length > 0
+                            ? availableModels
+                            : [{ id: "gateway-auto", name: "Auto — Let Gateway Decide", provider: null, available: true, healthy: true }]
+                        }
+                        selectedModelId={selectedModelId}
+                        onSelect={setSelectedModelId}
+                    />
+                </div>
+
                 {/* Card Footer */}
                 <div className='interview-card__footer'>
                     <span className='footer-info'>AI-Powered Strategy Generation &bull; Approx 30s</span>
                     <button
                         onClick={handleGenerateReport}
-                        className='generate-btn'>
+                        className='generate-btn'
+                        id='generate-strategy-btn'>
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" /></svg>
                         Generate My Interview Strategy
                     </button>
@@ -265,14 +460,14 @@ const Home = () => {
                         {reports.map(report => (
                             <li key={report._id} className='report-item' onClick={() => navigate(`/interview/${report._id}`)}>
                                 <div className='report-item__actions'>
-                                    <button 
+                                    <button
                                         className={`star-btn ${report.isStarred ? 'star-btn--active' : ''}`}
                                         onClick={(e) => handleStarToggle(e, report._id, report.isStarred)}
                                         title={report.isStarred ? 'Unstar plan' : 'Star plan'}
                                     >
                                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill={report.isStarred ? '#EAB308' : 'none'} stroke={report.isStarred ? '#EAB308' : 'currentColor'} strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
                                     </button>
-                                    <button 
+                                    <button
                                         className='delete-btn'
                                         onClick={(e) => handleDelete(e, report._id)}
                                         title='Delete plan'

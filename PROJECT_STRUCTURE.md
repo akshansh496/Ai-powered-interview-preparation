@@ -7,7 +7,7 @@
 
 ## 1. High-Level Architecture Overview
 
-This repository is a full-stack, AI-powered interview preparation platform featuring an **Intelligent AI Gateway** that evaluates runtime health, reliability, latency, and availability to dynamically route requests across multiple AI providers (Google Gemini, xAI Grok, and OpenRouter):
+This repository is a full-stack, AI-powered interview preparation platform featuring an **Intelligent AI Gateway** that evaluates runtime health, reliability, latency, and availability to dynamically route requests across multiple AI providers (Google Gemini and OpenRouter):
 
 ```text
                          InterviewAI
@@ -21,16 +21,16 @@ This repository is a full-stack, AI-powered interview preparation platform featu
                               ▼
                     Provider Evaluation
                               │
-              ┌───────────────┼───────────────┐
-              ▼               ▼               ▼
-           Gemini            Grok         OpenRouter
-              │               │               │
-              │               │               ▼
-              │               │        OpenRouter Router
-              │               │               │
-              │               │        Underlying Model
-              │               │
-              └───────────────┼───────────────┘
+               ┌──────────────┴──────────────┐
+               ▼                             ▼
+            Gemini                      OpenRouter
+               │                             │
+               │                             ▼
+               │                      OpenRouter Router
+               │                             │
+               │                      Underlying Model
+               │                             │
+               └──────────────┬──────────────┘
                               │
                               ▼
                          AI Response
@@ -70,8 +70,13 @@ Ai Powered Interview preparation/
 │
 ├── Backend/
 │   ├── .env.example                      # Template of environment variables for server and AI configuration
-│   ├── package.json                      # Backend dependencies & scripts (dev, test via native node runner)
+│   ├── benchmark-results/                # Benchmark latency outputs (JSON logs and telemetry)
+│   │   └── ai-latency-results.json       # Generated latency results and statistical distribution
+│   ├── package.json                      # Backend dependencies & scripts (test, benchmark:ai, dev)
 │   ├── package-lock.json                 # Dependency lockfile
+│   ├── scripts/
+│   │   ├── benchmark-ai-latency.js       # Standalone latency benchmark runner across AI providers
+│   │   └── verify-ai-models.js           # Model discovery & verification script (run before configuring registry)
 │   ├── server.js                         # Application entry point (Database connection & HTTP listener)
 │   ├── src/
 │   │   ├── app.js                        # Express setup: 2MB payload limits, CORS, cookie-parser, routing
@@ -86,29 +91,36 @@ Ai Powered Interview preparation/
 │   │   │   └── rateLimiter.middleware.js # In-memory sliding window rate limiter for expensive AI endpoints
 │   │   ├── models/
 │   │   │   ├── blacklist.model.js        # Blacklisted JWT tokens for secure logout
-│   │   │   ├── interviewReport.model.js  # Schema with compound index ({ user: 1, isStarred: -1, createdAt: -1 })
+│   │   │   ├── interviewReport.model.js  # Schema with compound index ({ user: 1, isStarred: -1, createdAt: -1 }),
+│   │   │   │                              #   aiMetadata subdocument (model, provider, selectionMode, fallbackCount,
+│   │   │   │                              #   totalRequestMs) persisted at creation time for historical attribution
 │   │   │   └── user.model.js             # User accounts schema with password hashing
 │   │   ├── routes/
 │   │   │   ├── auth.routes.js            # Endpoints: /api/auth (register, login, logout, me)
-│   │   │   └── interview.routes.js       # Endpoints: /api/interview (generate, reports, pdf, star, delete)
+│   │   │   └── interview.routes.js       # Endpoints: /api/interview + /api/ai/models (model status)
 │   │   └── services/
-│   │       ├── ai.service.js             # Application boundary for AI operations & error normalization
+│   │       ├── ai.service.js             # Application boundary: auto/manual routing, returns {interviewReport, metadata}
 │   │       └── ai/
 │   │           ├── provider.interface.js # Abstract base class defining the AIProvider contract
 │   │           ├── provider.registry.js  # Centralized provider registry mapping IDs to AIProvider instances
-│   │           ├── routing.engine.js     # Health tracking, telemetry metrics, and suitability scoring
+│   │           ├── model.registry.js     # Config-driven model registry with verified flag & env-var-only model IDs
+│   │           ├── model.health.js       # In-memory circuit breaker & health tracking per individual model
+│   │           ├── routing.engine.js     # Weighted scoring engine (45% success, 30% latency, 20% health, 5% avail)
 │   │           ├── ai.gateway.js         # Intelligent AI Gateway for dynamic evaluation, execution, & fallback
-│   │           ├── ai.router.js          # Backward-compatible router wrapper delegating to AI Gateway
+│   │           ├── ai.router.js          # Model-aware router delegating to AI Gateway
 │   │           ├── gemini.provider.js    # Google Gemini provider implementation with bounded retries
-│   │           ├── grok.provider.js      # xAI Grok provider implementation with structured Zod output
 │   │           └── openrouter.provider.js # OpenRouter provider with multi-format JSON extraction & free model support
 │   └── tests/
 │       ├── ai.service.test.js            # Unit tests for error normalization & key sanitization
-│       ├── ai.gateway.test.js            # Unit tests for AI Gateway dynamic provider selection & fallback
-│       ├── routing.engine.test.js        # Unit tests for suitability scoring, rate limits, and health tracking
-│       ├── ai.router.test.js             # Unit tests for router wrapper & backward compatibility
+│       ├── ai.gateway.test.js            # Unit tests for AI Gateway model-aware routing & fallback
+│       ├── ai.model.selection.test.js    # 25 tests: AUTO/MANUAL modes, latency metadata, MODEL_UNAVAILABLE,
+│       │                                 #   MODEL_NOT_FOUND, schema preservation, security, RoutingEngine integration
+│       ├── model.routing.test.js         # Comprehensive unit & resilience test suite for model-aware routing
+│       ├── model.registry.verified.test.js # 19 tests: verified flag, eligible filtering, dynamic scoring,
+│       │                                 #   openrouter/free final fallback, 404 cascade, no-retry, key safety
+│       ├── routing.engine.test.js        # 32 unit tests for RoutingEngine scoring & selectBestModel
+│       ├── ai.router.test.js             # Unit tests for AIRouter model-aware routing & fallback
 │       ├── provider.registry.test.js     # Unit tests for provider interface contract & registry
-│       ├── grok.provider.test.js         # Unit tests for Grok provider with mocked fetch & schemas
 │       ├── openrouter.provider.test.js   # Unit tests for OpenRouter provider with mocked fetch & schemas
 │       └── rateLimiter.test.js           # Unit tests for in-memory rate limiting and isolation
 │
@@ -167,48 +179,68 @@ Ai Powered Interview preparation/
 ### 3.1 Backend (`Backend/`)
 
 - **[server.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/server.js)**: Starts database connection and listens on `process.env.PORT || 3000`.
-- **[src/app.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/app.js)**: Configures Express middleware (2MB body payload protection, cookie parsing, dynamic CORS headers) and mounts route handlers (`/api/auth`, `/api/interview`).
+- **[src/app.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/app.js)**: Configures Express middleware (2MB body payload protection, cookie parsing, dynamic CORS headers) and mounts route handlers (`/api/auth`, `/api/interview`, `/api/ai`).
 - **[src/config/database.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/config/database.js)**: Connects to MongoDB using `process.env.MONGO_URI`.
 
 #### AI Gateway & Multi-Provider Layer (`src/services/ai/`)
 - **[provider.interface.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai/provider.interface.js)**:
   - Abstract base class defining the provider contract (`generateInterviewReport`, `generateResumePdf`, `isAvailable`, `model`).
 - **[provider.registry.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai/provider.registry.js)**:
-  - Centralized Provider Registry containing default providers `gemini`, `grok`, and `openrouter`.
+  - Centralized Provider Registry containing default providers `gemini` and `openrouter`.
   - Exposes `registerProvider`, `getProvider`, `hasProvider`, `getRegisteredNames`, and `getAllProviders`.
+- **[model.registry.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai/model.registry.js)**:
+  - Centralized, config-driven Model Registry. **All model IDs come exclusively from environment variables** — no hardcoded model IDs.
+  - Each registered model carries a `verified: true` flag. Only models whose env var is explicitly set (non-empty) are registered; absent env vars result in no registration (not an unverified entry).
+  - `getPrimaryModels()`: returns all enabled non-fallback models (backward-compatible).
+  - `getEligiblePrimaryModels()`: returns only `enabled && verified && !isFinalFallback` models (routing-ready set).
+  - `getIneligibleModels()`: diagnostic method listing disabled/unverified non-fallback models.
+  - `openrouter/free` (`OPENROUTER_MODEL`) always registered as `isFinalFallback: true` — never scored by RoutingEngine.
+- **[model.health.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai/model.health.js)**:
+  - In-memory circuit breaker and health tracker per individual AI model. Tracks consecutive/total failures, success timestamps, latency, and enforces cooldown with probe recovery.
+  - Extended with bounded rolling windows: `latencyHistory` (successful requests only, capped at 30) and `recentResults` (all outcomes, capped at 30), powering `getAverageLatencyMs()`, `getRecentSuccessRate()`, and `getObservationCount()` accessors used by `RoutingEngine`.
 - **[routing.engine.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai/routing.engine.js)**:
-  - Maintains bounded in-memory runtime health state (success counts, failure counts, consecutive failures, rolling latency samples, rate-limit cooldown timers).
-  - Calculates deterministic suitability scores (0-100) weighting capability (25%), availability (20%), health & reliability (35%), and latency (20%).
+  - Dynamic, request-time model scoring and selection engine. Computes a composite weighted score per candidate: **45% recent success rate + 30% normalized latency + 20% circuit-breaker health + 5% availability**.
+  - Applies cold-start defaults (`successRate=0.90`, `latencyScore=0.70`) for models with fewer than `MIN_OBSERVATIONS` (3) observations to avoid penalizing fresh models.
+  - `selectBestModel()` filters eligible primaries (excluding `verified:false`, `isFinalFallback`, already-attempted, and unhealthy models), scores all candidates, and returns the highest scorer with priority-based tie-breaking. `openrouter/free` is **never** scored by this engine.
 - **[ai.gateway.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai/ai.gateway.js)**:
-  - Intelligent AI Gateway executing tasks by dynamically evaluating registered providers with `RoutingEngine`.
-  - Executes requests, records runtime telemetry, handles transient failure fallback with loop protection, and emits structured logs and console banners.
+  - Health-Aware Multi-Model AI Gateway with two execution modes:
+    - **AUTO** (`execute()`): RoutingEngine dynamically selects best healthy model with full fallback chain. Returns `{ data, metadata }`.
+    - **MANUAL** (`executeManual(requestedModel)`): Executes exactly the requested model. No silent fallback. Throws `MODEL_UNAVAILABLE` (503) or `MODEL_NOT_FOUND` (404) when ineligible.
+  - Instruments per-request lifecycle latency (`requestId`, `routingDecisionMs`, `providerRequestMs`, `totalRequestMs`).
+  - Emits per-request routing score trace logs (`routingScore=[model:score(cs=bool)...]`) for full observability.
 - **[ai.router.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai/ai.router.js)**:
-  - Backward-compatible wrapper delegating execution directly to `aiGateway`.
+  - Model-aware router interface delegating execution directly to `aiGateway`.
 - **[gemini.provider.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai/gemini.provider.js)**:
   - Google Gemini integration using `@google/genai`. Configurable model via `GEMINI_MODEL` (default: `gemini-3-flash-preview`).
-- **[grok.provider.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai/grok.provider.js)**:
-  - xAI Grok API integration using standard OpenAI-compatible REST endpoint (`https://api.x.ai/v1/chat/completions`) and native `fetch`.
 - **[openrouter.provider.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai/openrouter.provider.js)**:
-  - OpenRouter API integration using OpenAI-compatible completions. Features multi-format `extractAndParseJson` helper supporting raw JSON, Markdown code blocks, and responses embedded in conversational text.
+  - OpenRouter API integration using OpenAI-compatible completions with native `AbortController` cancellation and multi-format `extractAndParseJson` helper supporting raw JSON, Markdown code blocks, and responses embedded in conversational text.
 - **[ai.service.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/services/ai.service.js)**:
-  - Application-level boundary for AI operations dispatching calls to `aiGateway.execute()`.
-  - Normalizes vendor errors into domain `AIError` instances.
+  - Application-level boundary. Accepts optional `requestedModel` — routes to `execute()` (AUTO) or `executeManual()` (MANUAL).
+  - Returns `{ interviewReport, metadata }` or `{ html, metadata }`. Normalizes `MODEL_UNAVAILABLE` and `MODEL_NOT_FOUND` into typed `AIError` instances without leaking internal state.
 
 #### Middlewares, Controllers, & Models
 - **[src/middlewares/rateLimiter.middleware.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/middlewares/rateLimiter.middleware.js)**:
   - In-memory sliding window rate limiter keyed by user ID or IP (`AI_REQUEST_LIMIT_PER_WINDOW`, `AI_RATE_LIMIT_WINDOW_MS`).
 - **[src/controllers/interview.controller.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/controllers/interview.controller.js)**:
   - Handles HTTP requests, calls `ai.service.js`, and maps `AIError` to clean HTTP status codes (429, 503, 504, 422, 500).
+  - Exposes `getAvailableModelsController` (GET `/api/ai/models`): returns eligible registry models with health status. No API keys or internal paths exposed.
+  - Accepts optional `requestedModel` body field on POST `/api/interview`. Returns `aiMetadata` alongside `interviewReport` in the response (existing schema unchanged).
+  - Returns `MODEL_UNAVAILABLE` (503) or `MODEL_NOT_FOUND` (404) structured JSON when manual model selection fails.
 - **[src/models/interviewReport.model.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/src/models/interviewReport.model.js)**:
   - Stores interview plans and match scores; indexed on `{ user: 1, isStarred: -1, createdAt: -1 }`.
+  - `aiMetadata` subdocument (`model`, `modelDisplayName`, `provider`, `selectionMode`, `fallbackCount`, `totalRequestMs`) persisted at creation time — source of truth for historical report attribution. All fields optional for backward compatibility with older reports.
+  - `getAllInterviewReports` projection now includes `title` and `aiMetadata` for report-card display and historical attribution in the list view.
 
-#### Backend Tests (`tests/`)
+#### Backend Tests & Benchmarks (`tests/`, `scripts/`)
+- **[verify-ai-models.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/scripts/verify-ai-models.js)**: Model discovery and real-request verification script. Discovers all Gemini models via `@google/genai` SDK and all OpenRouter `:free` models via catalog API, then verifies each with a minimal real generation request and validates response schema conformance. Run this before updating `.env` model IDs.
+- **[benchmark-ai-latency.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/scripts/benchmark-ai-latency.js)**: Standalone benchmark script measuring real response latency, token throughput, and router decisions.
+- **[model.registry.verified.test.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/tests/model.registry.verified.test.js)**: 19 tests covering all Step 15 requirements: verified/unverified filtering, disabled model exclusion, variable registry sizes, dynamic scoring over static priority, openrouter/free final fallback enforcement, 404→fallback cascade, no-retry within request, and API key non-exposure.
+- **[model.routing.test.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/tests/model.routing.test.js)**: Full 16+ scenario test suite verifying priority ordering, health cooldowns, probe recovery, timeout abortions, fallback loops, and openrouter/free behavior.
 - **[ai.service.test.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/tests/ai.service.test.js)**: Unit tests for domain error normalization and API key sanitization.
-- **[ai.gateway.test.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/tests/ai.gateway.test.js)**: Unit tests for AI Gateway dynamic provider selection, rate limit cooldowns, and fallback.
-- **[routing.engine.test.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/tests/routing.engine.test.js)**: Unit tests for suitability scoring, reliability preferences over latency, and provider filtering.
-- **[ai.router.test.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/tests/ai.router.test.js)**: Backward-compatibility unit tests for router routing and fallback logic.
+- **[ai.gateway.test.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/tests/ai.gateway.test.js)**: Unit tests for AI Gateway model-aware dynamic selection, fallback, banner observability, and cooldown exclusion.
+- **[routing.engine.test.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/tests/routing.engine.test.js)**: 32 unit tests covering `normalizeLatency` boundary/interpolation, `scoreModel` (cold-start, measured values, clamping, health components), `selectBestModel` (verified filter, filtering, tie-breaking, dynamic vs. static ordering), and AIGateway integration tests confirming engine-driven selection and final fallback behavior.
+- **[ai.router.test.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/tests/ai.router.test.js)**: Unit tests for AIRouter model-aware routing, fallback mechanism, and `AI_ENABLE_FALLBACK=false` behavior.
 - **[provider.registry.test.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/tests/provider.registry.test.js)**: Unit tests for AIProvider abstract contract and ProviderRegistry lookup & registration.
-- **[grok.provider.test.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/tests/grok.provider.test.js)**: Unit tests for xAI Grok provider with mocked fetch, credential validation, and Zod output verification.
 - **[openrouter.provider.test.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/tests/openrouter.provider.test.js)**: Unit tests for OpenRouter provider with multi-format JSON extraction and Zod output verification.
 - **[rateLimiter.test.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Backend/tests/rateLimiter.test.js)**: Unit tests for in-memory rate limiting and isolation.
 
@@ -218,9 +250,10 @@ Ai Powered Interview preparation/
 
 - **[src/main.jsx](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Frontend/src/main.jsx)** & **[src/App.jsx](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Frontend/src/App.jsx)**: Mounts React tree with Auth and Interview providers.
 - **[src/features/interview/](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Frontend/src/features/interview)**:
-  - `interview.context.jsx` & `useInterview.js`: Encapsulates generation, paginated fetching, and page state.
-  - `Home.jsx`: Dashboard displaying input form, paginated recent plans list, and empty state indicator.
-  - `Interview.jsx`: Detailed plan view with match score, accordion questions, preparation roadmap, and resume PDF download.
+  - `interview.context.jsx` & `useInterview.js`: Encapsulates generation, paginated fetching, model selection state (`selectedModelId`, `availableModels`, `modelUnavailableError`, `aiMetadata`), and `fetchAvailableModels()`.
+  - `Home.jsx`: Dashboard with input form, paginated recent plans list, **ModelSelector dropdown** (dynamic backend-driven model list), and **ModelUnavailableBanner** (structured `MODEL_UNAVAILABLE` error UX with "Switch to Auto" action).
+  - `Interview.jsx`: Detailed plan view with match score, accordion questions, preparation roadmap, resume PDF download, and **AI attribution sidebar card** (model name, provider, selectionMode badge, response time, fallback count).
+  - `interview.api.js`: Added `requestedModel` to `generateInterviewReport` FormData and `getAvailableModels()` call to `GET /api/ai/models`.
 - **[tests/interview.spec.js](file:///Users/akshanshgupta/Desktop/Ai%20Powered%20Interview%20preparation/Frontend/tests/interview.spec.js)**: 10 Playwright E2E test scenarios covering full user flows.
 
 ---
@@ -228,27 +261,42 @@ Ai Powered Interview preparation/
 ## 4. Environment Variables Reference
 
 ### Backend (`Backend/.env`)
+
+> [!IMPORTANT]
+> Set `GEMINI_MODEL`, `GEMINI_SECONDARY_MODEL`, and `OPENROUTER_PRIMARY_MODEL` **only after running** `node Backend/scripts/verify-ai-models.js`. Do NOT guess model IDs — unverified/absent env vars produce no model registration.
+
 | Variable | Description | Default / Example |
 |---|---|---|
 | `PORT` | Port for the backend Express server | `3000` |
 | `MONGO_URI` | MongoDB connection string | `mongodb://localhost:27017/interview-prep` |
 | `JWT_SECRET` | Secret key used to sign and verify JSON Web Tokens | `your-secret-key` |
 | `GOOGLE_GENAI_API_KEY` | Google Gemini API Key | `AIzaSy...` |
-| `XAI_API_KEY` | xAI Grok API Key | `xai-...` |
 | `OPENROUTER_API_KEY` | OpenRouter API Key | `sk-or-v1-...` |
+| `GEMINI_MODEL` | **Verified** Gemini primary model (priority 1) | `gemini-3.1-flash-lite-preview` |
+| `GEMINI_SECONDARY_MODEL` | **Verified** Gemini secondary model (priority 2) | `gemini-3.1-flash-lite` |
+| `OPENROUTER_PRIMARY_MODEL` | **Verified** OpenRouter free model (priority 3) | `nvidia/nemotron-3-super-120b-a12b:free` |
+| `OPENROUTER_SECONDARY_MODEL` | **Verified** OpenRouter free model (priority 4) — optional | _(not set)_ |
+| `OPENROUTER_MODEL` | Final availability fallback — **always** `openrouter/free` | `openrouter/free` |
 | `AI_ENABLE_FALLBACK` | Whether transient fallback is active (`true`/`false`) | `true` |
-| `GEMINI_MODEL` | Gemini model name | `gemini-3-flash-preview` |
-| `GROK_MODEL` | xAI Grok model name | `grok-2-latest` |
-| `OPENROUTER_MODEL` | OpenRouter model name | `openrouter/free` |
+| `AI_PROVIDER_TIMEOUT_MS` | Per-model request timeout in ms | `8000` |
+| `AI_MODEL_FAILURE_THRESHOLD` | Consecutive failures before circuit-breaker cooldown | `3` |
+| `AI_MODEL_COOLDOWN_MS` | Circuit-breaker cooldown duration in ms | `300000` (5 mins) |
 | `FRONTEND_URL` | URL of the frontend for CORS configuration | `http://localhost:5173` |
 | `AI_REQUEST_LIMIT_PER_WINDOW` | Maximum AI requests allowed per rate limit window | `10` |
 | `AI_RATE_LIMIT_WINDOW_MS` | Duration of the sliding rate limit window in ms | `900000` (15 mins) |
-| `AI_MAX_RETRIES` | Maximum retry attempts for transient AI errors | `2` |
-| `AI_REQUEST_TIMEOUT_MS` | AI request timeout threshold in ms | `60000` (60 secs) |
 
 ---
 
-## 5. How to Add a Future Provider
+## 5. How to Add a New Verified Model or Provider
+
+### Adding a New Model to an Existing Provider
+
+1. **Run verification**: `node Backend/scripts/verify-ai-models.js` to get the verified model ID and latency.
+2. **Update `.env`**: Set the appropriate env var (`GEMINI_MODEL`, `GEMINI_SECONDARY_MODEL`, `OPENROUTER_PRIMARY_MODEL`, or `OPENROUTER_SECONDARY_MODEL`) to the verified model ID.
+3. **Restart the backend**: `ModelRegistry` reads env vars at startup; the verified model will automatically enter routing.
+4. **No code changes required** — the `RoutingEngine` will score the new model at request time alongside existing ones.
+
+### Adding a New Provider
 
 Adding a new provider (e.g. OpenAI, Anthropic Claude, DeepSeek) requires **zero changes to controllers, frontend code, or routing algorithms**:
 
@@ -262,10 +310,6 @@ Adding a new provider (e.g. OpenAI, Anthropic Claude, DeepSeek) requires **zero 
      ```javascript
      this.registerProvider("<provider-name>", <providerInstance>);
      ```
-   - The `RoutingEngine` and `AIGateway` will immediately and automatically evaluate the new provider at runtime based on its availability, health, latency, and success rates.
-3. **Configure Environment Variables**:
-   - Add `<PROVIDER>_API_KEY` and `<PROVIDER>_MODEL` to `.env`.
-4. **Add Unit Tests**:
-   - Create `Backend/tests/<provider-name>.provider.test.js` with mock requests verifying schema conformance.
-5. **Update Routing**:
-   - Switch `AI_DEFAULT_PROVIDER` or `AI_FALLBACK_PROVIDER` to the new provider when desired.
+3. **Add a verified model env var** and set it to a model ID confirmed working via `verify-ai-models.js`.
+4. **Register the model** in `ModelRegistry._initDefaultModels()` reading the new env var.
+5. **Add Unit Tests**: Create `Backend/tests/<provider-name>.provider.test.js` verifying schema conformance.

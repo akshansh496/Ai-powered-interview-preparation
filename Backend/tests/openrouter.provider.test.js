@@ -314,7 +314,7 @@ test("OpenRouterProvider - API Execution, Schema Validation, and Retry tests", a
             const report = await provider.generateInterviewReport({
                 jobDescription: "Senior Engineer",
                 selfDescription: "5 years experience"
-            })
+            }, { maxRetries: 1 })
 
             assert.equal(report.title, "Senior Full Stack Engineer")
             assert.equal(callCount, 2)
@@ -354,7 +354,7 @@ test("OpenRouterProvider - API Execution, Schema Validation, and Retry tests", a
             const report = await provider.generateInterviewReport({
                 jobDescription: "Senior Engineer",
                 selfDescription: "5 years experience"
-            })
+            }, { maxRetries: 1 })
 
             assert.equal(report.title, "Senior Full Stack Engineer")
             assert.equal(callCount, 2)
@@ -363,5 +363,36 @@ test("OpenRouterProvider - API Execution, Schema Validation, and Retry tests", a
             else delete process.env.OPENROUTER_API_KEY
         }
     })
-})
 
+    await t.test("9. should abort fetch and throw REQUEST_TIMEOUT when timeout expires", async () => {
+        const origKey = process.env.OPENROUTER_API_KEY
+        process.env.OPENROUTER_API_KEY = "mock-or-key"
+
+        const mockFetch = async (url, opts) => {
+            return new Promise((resolve, reject) => {
+                const signal = opts.signal
+                if (signal) {
+                    signal.addEventListener("abort", () => {
+                        const abortErr = new Error("The operation was aborted")
+                        abortErr.name = "AbortError"
+                        reject(abortErr)
+                    })
+                }
+            })
+        }
+
+        try {
+            const provider = new OpenRouterProvider({ fetchFn: mockFetch })
+            await assert.rejects(
+                async () => await provider.generateInterviewReport({
+                    jobDescription: "Senior Engineer",
+                    selfDescription: "5 years experience"
+                }, { timeoutMs: 50, maxRetries: 0 }),
+                (err) => err.code === "REQUEST_TIMEOUT"
+            )
+        } finally {
+            if (origKey !== undefined) process.env.OPENROUTER_API_KEY = origKey
+            else delete process.env.OPENROUTER_API_KEY
+        }
+    })
+})

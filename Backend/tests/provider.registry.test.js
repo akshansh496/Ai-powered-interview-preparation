@@ -3,7 +3,6 @@ const assert = require("node:assert/strict")
 const { ProviderRegistry } = require("../src/services/ai/provider.registry")
 const { AIProvider } = require("../src/services/ai/provider.interface")
 const geminiProvider = require("../src/services/ai/gemini.provider")
-const grokProvider = require("../src/services/ai/grok.provider")
 const openrouterProvider = require("../src/services/ai/openrouter.provider")
 
 test("AIProvider Interface tests", async (t) => {
@@ -22,14 +21,6 @@ test("AIProvider Interface tests", async (t) => {
         assert.equal(typeof geminiProvider.isAvailable, "function")
     })
 
-    await t.test("grokProvider should conform to AIProvider interface", () => {
-        assert.ok(grokProvider instanceof AIProvider)
-        assert.equal(grokProvider.name, "grok")
-        assert.equal(typeof grokProvider.generateInterviewReport, "function")
-        assert.equal(typeof grokProvider.generateResumePdf, "function")
-        assert.equal(typeof grokProvider.isAvailable, "function")
-    })
-
     await t.test("openrouterProvider should conform to AIProvider interface", () => {
         assert.ok(openrouterProvider instanceof AIProvider)
         assert.equal(openrouterProvider.name, "openrouter")
@@ -40,13 +31,13 @@ test("AIProvider Interface tests", async (t) => {
 })
 
 test("ProviderRegistry tests", async (t) => {
-    await t.test("should initialize with default gemini, grok, and openrouter providers", () => {
+    await t.test("should initialize with default gemini and openrouter providers and not grok", () => {
         const registry = new ProviderRegistry()
         assert.equal(registry.hasProvider("gemini"), true)
-        assert.equal(registry.hasProvider("grok"), true)
         assert.equal(registry.hasProvider("openrouter"), true)
+        assert.equal(registry.hasProvider("grok"), false)
         assert.equal(registry.hasProvider("nonexistent"), false)
-        assert.deepEqual(registry.getRegisteredNames().sort(), ["gemini", "grok", "openrouter"].sort())
+        assert.deepEqual(registry.getRegisteredNames().sort(), ["gemini", "openrouter"].sort())
     })
 
     await t.test("should register and retrieve a valid custom provider", () => {

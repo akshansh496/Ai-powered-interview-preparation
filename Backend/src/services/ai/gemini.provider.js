@@ -5,8 +5,8 @@ const { AIProvider } = require("./provider.interface")
 
 // Configuration constants with environment variable overrides
 const DEFAULT_MODEL = process.env.GEMINI_MODEL || "gemini-3-flash-preview"
-const MAX_RETRIES = parseInt(process.env.AI_MAX_RETRIES, 10) || 2
-const TIMEOUT_MS = parseInt(process.env.AI_REQUEST_TIMEOUT_MS, 10) || 60000
+const MAX_RETRIES = parseInt(process.env.AI_MAX_RETRIES, 10) || 0
+const TIMEOUT_MS = parseInt(process.env.AI_PROVIDER_TIMEOUT_MS, 10) || parseInt(process.env.AI_REQUEST_TIMEOUT_MS, 10) || 8000
 
 let genAIClient = null
 
@@ -67,6 +67,11 @@ function isTransientError(error) {
     if (!error) return false
     const message = (error.message || "").toLowerCase()
     const status = error.status || error.statusCode || (error.response && error.response.status)
+    const code = error.code
+
+    if (code === "REQUEST_TIMEOUT" || code === "TIMEOUT" || error.name === "AbortError") {
+        return true
+    }
 
     // Rate limits, server overload, temporary network issues
     if (status === 429 || status === 500 || status === 502 || status === 503 || status === 504) {
@@ -92,13 +97,13 @@ function isTransientError(error) {
 }
 
 /**
- * Executes a function with a timeout.
+ * Executes a function with a strict timeout.
  */
 function withTimeout(promise, timeoutMs) {
     let timer
     const timeoutPromise = new Promise((_, reject) => {
         timer = setTimeout(() => {
-            const timeoutError = new Error(`AI request timed out after ${timeoutMs}ms.`)
+            const timeoutError = new Error(`AI request to Gemini timed out after ${timeoutMs}ms.`)
             timeoutError.code = "REQUEST_TIMEOUT"
             reject(timeoutError)
         }, timeoutMs)
@@ -148,6 +153,8 @@ class GeminiProvider extends AIProvider {
     async generateInterviewReport({ resume, selfDescription, jobDescription, daysUntilInterview }, options = {}) {
         const ai = getGenAIClient()
         const modelToUse = options.model || this.model
+        const timeoutMs = options.timeoutMs || parseInt(process.env.AI_PROVIDER_TIMEOUT_MS, 10) || TIMEOUT_MS
+        const maxRetries = options.maxRetries !== undefined ? options.maxRetries : MAX_RETRIES
 
         const timingInstruction = daysUntilInterview
             ? `The candidate has exactly ${daysUntilInterview} day(s) until their actual interview. The preparationPlan array MUST contain exactly ${daysUntilInterview} entries (one per day, day 1 through day ${daysUntilInterview}), with the workload and topic depth per day scaled realistically to fit that timeframe. If the timeframe is very short (1-2 days), prioritize only the highest-impact topics and skip lower-priority skill gaps rather than cramming everything in.`
@@ -190,12 +197,14 @@ ${timingInstruction}`
             return validationResult.data
         }
 
-        return await executeWithRetry(executeCall)
+        return await executeWithRetry(executeCall, maxRetries, timeoutMs)
     }
 
     async generateResumePdf({ resume, selfDescription, jobDescription }, options = {}) {
         const ai = getGenAIClient()
         const modelToUse = options.model || this.model
+        const timeoutMs = options.timeoutMs || parseInt(process.env.AI_PROVIDER_TIMEOUT_MS, 10) || TIMEOUT_MS
+        const maxRetries = options.maxRetries !== undefined ? options.maxRetries : MAX_RETRIES
 
         const prompt = `Generate resume for a candidate with the following details:
 Resume: ${resume || "N/A"}
@@ -239,7 +248,7 @@ The resume should not be so lengthy, it should ideally be 1-2 pages long when co
             return validationResult.data.html
         }
 
-        return await executeWithRetry(executeCall)
+        return await executeWithRetry(executeCall, maxRetries, timeoutMs)
     }
 }
 
